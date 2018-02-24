@@ -5,6 +5,7 @@ mod parser;
 #[cfg(test)]
 mod tests;
 
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter, Result as FmtResult, Write};
 
 use regex::Regex;
@@ -14,6 +15,10 @@ pub use common::env::Env;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Atom(pub Symbol);
+
+impl AsRef<str> for Atom {
+    fn as_ref(&self) -> &str{ self.0.as_ref() }
+}
 
 impl Display for Atom {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
@@ -57,8 +62,20 @@ impl Display for Atom {
     }
 }
 
-impl<S: AsRef<str>> From<S> for Atom {
-    fn from(s: S) -> Atom {
+impl<'a> From<&'a str> for Atom {
+    fn from(s: &'a str) -> Atom {
+        Atom(s.into())
+    }
+}
+
+impl<'a> From<Cow<'a, str>> for Atom {
+    fn from(s: Cow<'a, str>) -> Atom {
+        Atom(s.into())
+    }
+}
+
+impl From<String> for Atom {
+    fn from(s: String) -> Atom {
         Atom(s.into())
     }
 }
@@ -136,11 +153,44 @@ impl Display for Term {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
         match *self {
             Term::Anonymous => fmt.write_char('_'),
-            Term::Structure(atom, ref args) => unimplemented!(),
-            Term::Variable(ref v) => fmt.write_str(v.as_ref()),
+            Term::Structure(ref atom, ref args) => {
+                Display::fmt(atom, fmt)?;
+                fmt.write_char('(')?;
+                let mut first = true;
+                for arg in args {
+                    if first {
+                        first = false;
+                    } else {
+                        fmt.write_str(", ")?;
+                    }
+                    Display::fmt(arg, fmt)?;
+                }
+                fmt.write_char(')')
+            },
+            Term::Variable(ref v) => Display::fmt(v, fmt),
         }
     }
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Clause(Term, Vec<Term>);
+
+impl Display for Clause {
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        let &Clause(ref hd, ref tl) = self;
+        Display::fmt(hd, fmt)?;
+        if !tl.is_empty() {
+            let mut first = true;
+            for term in tl {
+                if first {
+                    fmt.write_str(" :-\n    ")?;
+                    first = false;
+                } else {
+                    fmt.write_str(",\n    ")?;
+                }
+                Display::fmt(term, fmt)?;
+            }
+        }
+        fmt.write_char('.')
+    }
+}

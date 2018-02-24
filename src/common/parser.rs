@@ -8,7 +8,7 @@
 use std::char;
 use std::str::FromStr;
 
-use nom::{digit, hex_digit, multispace, IError, IResult};
+use nom::{digit, hex_digit, multispace, IError, IResult, Needed};
 
 use common::{Atom, Clause, Functor, Term, Variable};
 
@@ -27,6 +27,9 @@ from_str! {
     /// Parses an Atom.
     atom => Atom,
 
+    /// Parses a Clause.
+    clause => Clause,
+
     /// Parses a Functor.
     functor => Functor,
 
@@ -36,28 +39,39 @@ from_str! {
 
 // The "basic" common types.
 
-named!(atom(&str) -> Atom, alt!(
+named!(atom(&str) -> Atom, ws!(alt!(
     map!(
         delimited!(tag_s!("'"), many0!(atom_quoted_char), tag_s!("'")),
         |cs| Atom::from(cs.into_iter().filter_map(|x| x).collect::<String>())
     ) |
     map!(unquoted_atom, |cs| cs.into())
-));
+)));
 
-named!(functor(&str) -> Functor, do_parse!(
+named!(clause(&str) -> Clause, ws!(do_parse!(
+    clause: alt!(clause_rule | clause_fact) >>
+    tag_s!(".") >>
+    ( clause )
+)));
+
+named!(functor(&str) -> Functor, ws!(do_parse!(
     atom: atom >>
     tag_s!("/") >>
     arity: map_res!(digit, FromStr::from_str) >>
-    ( Functor(atom, arity) )));
+    ( Functor(atom, arity) )
+)));
 
-named!(term(&str) -> Term, alt!(
-    map!(variable, |s| Term::Variable(Variable::from_str(s).unwrap()))
-));
+named!(term(&str) -> Term, ws!(alt!(
+    map!(variable, |s| if s == "_" {
+        Term::Anonymous
+    } else {
+        Term::Variable(Variable::from_str(s).unwrap())
+    }) | term_structure
+)));
 
-named!(variable(&str) -> &str, recognize!(tuple!(
+named!(variable(&str) -> &str, ws!(recognize!(tuple!(
     take_while1_s!(is_variable_start_char),
     take_while_s!(is_plain_char)
-)));
+))));
 
 // Smaller primitives.
 
@@ -107,6 +121,23 @@ named!(unquoted_atom(&str) -> &str, recognize!(tuple!(
     take_while_s!(is_plain_char)
 )));
 
+named!(clause_fact(&str) -> Clause, map!(term, |hd| Clause(hd, vec![])));
+
+named!(clause_rule(&str) -> Clause, do_parse!(
+    hd: term >>
+    tag_s!(":-") >>
+    tl: separated_list!(tag_s!(","), term) >>
+    ( Clause(hd, tl) )
+));
+
+named!(term_structure(&str) -> Term, do_parse!(
+    atom: atom >>
+    tag_s!("(") >>
+    subterms: separated_list!(tag_s!(","), term) >>
+    tag_s!(")") >>
+    ( Term::Structure(atom, subterms) )
+));
+
 // Helper functions.
 
 fn all_hex_digits(s: &str) -> bool {
@@ -117,22 +148,25 @@ fn all_hex_digits(s: &str) -> bool {
 }
 
 fn is_atom_start_char(ch: char) -> bool {
-    'a' <= ch && ch <= 'z'
+    ('a' <= ch && ch <= 'z') || ('0' <= ch && ch <= '9')
 }
 
 fn is_variable_start_char(ch: char) -> bool {
     ('A' <= ch && ch <= 'Z') || ch == '_'
 }
 
-fn is_plain_char(_ch: char) -> bool {
-    unimplemented!()
+fn is_plain_char(ch: char) -> bool {
+    ('A' <= ch && ch <= 'Z') ||
+    ('a' <= ch && ch <= 'z') ||
+    ('0' <= ch && ch <= '9') ||
+    ch == '_'
 }
 
 fn one_char(input: &str) -> IResult<&str, char> {
     let mut iter = input.chars();
     match iter.next() {
         Some(ch) => IResult::Done(iter.as_str(), ch),
-        None => IResult::Incomplete(unimplemented!()),
+        None => IResult::Incomplete(Needed::Size(1)),
     }
 }
 
