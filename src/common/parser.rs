@@ -37,9 +37,22 @@ from_str! {
     term => Term,
 }
 
+/// Matches whitespace or a line comment.
+named!(whitespace_or_comment(&str) -> &str, recognize!(many0!(alt!(
+    value!((), one_of!(" \n\r\t")) |
+    value!((), tuple!(tag_s!("%"), take_till_s!(|ch| ch == '\r' || ch == '\n')))
+))));
+
+/// Removes whitespace and line comments.
+macro_rules! remove_whitespace_and_comments {
+    ($i:expr, $($args:tt)*) => {
+        sep!($i, whitespace_or_comment, $($args)*)
+    };
+}
+
 // The "basic" common types.
 
-named!(atom(&str) -> Atom, ws!(alt!(
+named!(atom(&str) -> Atom, remove_whitespace_and_comments!(alt!(
     map!(
         delimited!(tag_s!("'"), many0!(atom_quoted_char), tag_s!("'")),
         |cs| Atom::from(cs.into_iter().filter_map(|x| x).collect::<String>())
@@ -47,20 +60,20 @@ named!(atom(&str) -> Atom, ws!(alt!(
     map!(unquoted_atom, |cs| cs.into())
 )));
 
-named!(clause(&str) -> Clause, ws!(do_parse!(
+named!(clause(&str) -> Clause, remove_whitespace_and_comments!(do_parse!(
     clause: alt!(clause_rule | clause_fact) >>
     tag_s!(".") >>
     ( clause )
 )));
 
-named!(functor(&str) -> Functor, ws!(do_parse!(
+named!(functor(&str) -> Functor, remove_whitespace_and_comments!(do_parse!(
     atom: atom >>
     tag_s!("/") >>
     arity: map_res!(digit, FromStr::from_str) >>
     ( Functor(atom, arity) )
 )));
 
-named!(term(&str) -> Term, ws!(alt!(
+named!(term(&str) -> Term, remove_whitespace_and_comments!(alt!(
     map!(variable, |s| if s == "_" {
         Term::Anonymous
     } else {
@@ -68,7 +81,7 @@ named!(term(&str) -> Term, ws!(alt!(
     }) | term_structure
 )));
 
-named!(variable(&str) -> &str, ws!(recognize!(tuple!(
+named!(variable(&str) -> &str, remove_whitespace_and_comments!(recognize!(tuple!(
     take_while1_s!(is_variable_start_char),
     take_while_s!(is_plain_char)
 ))));
