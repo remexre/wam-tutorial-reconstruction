@@ -1,6 +1,7 @@
 //! Common code used by multiple chapters.
 
 mod env;
+mod flatten;
 pub mod parsers;
 #[cfg(test)]
 mod tests;
@@ -12,7 +13,8 @@ use nom::{Err as NomErr, IError, IResult, Needed};
 use regex::Regex;
 use symbol::Symbol;
 
-pub use common::env::Env;
+pub use self::env::Env;
+pub use self::flatten::{FlatTerm, FlatTermValue};
 
 /// An error while parsing.
 #[derive(Clone, Debug, Fail, PartialEq)]
@@ -27,7 +29,14 @@ impl ParseError {
         fn find_position(err: NomErr<&str>) -> Option<&str> {
             match err {
                 NomErr::Code(_) => None,
-                NomErr::Node(_, errs) => unimplemented!(),
+                NomErr::Node(_, errs) => {
+                    for err in errs {
+                        if let Some(pos) = find_position(err) {
+                            return Some(pos);
+                        }
+                    }
+                    None
+                }
                 NomErr::Position(_, pos) => Some(pos),
                 NomErr::NodePosition(_, pos, _) => Some(pos),
             }
@@ -247,7 +256,7 @@ impl Display for Term {
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Clause(Term, Vec<Term>);
+pub struct Clause(pub Term, pub Vec<Term>);
 
 impl Display for Clause {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {

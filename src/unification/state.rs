@@ -43,18 +43,24 @@ impl State {
         n2
     }
 
-    /// Extracts a Term from a given location in the heap.
-    pub fn extract_term(&self, idx: usize) -> Result<Term, Error> {
-        match self.heap[idx] {
+    /// Extracts a Term from the given HeapCell, which may be from a register.
+    /// If it is not, the heap index of the cell should be passed in as the
+    /// last argument.
+    pub fn extract_term(
+        &self,
+        cell: HeapCell,
+        idx: Option<usize>,
+    ) -> Result<Term, Error> {
+        match cell {
             HeapCell::Functor(f) => {
                 bail!("Found functor {} where a term was expected", f)
             }
-            HeapCell::Ref(n) => if n == idx {
+            HeapCell::Ref(n) => if idx.map(|i| n == i).unwrap_or(false) {
                 Ok(Term::Variable(
                     Variable::from_str(format!("_{}", n)).unwrap(),
                 ))
             } else {
-                self.extract_term(n)
+                self.extract_term_from(n)
             },
             HeapCell::Str(f_idx) => {
                 let functor = match self.heap[f_idx] {
@@ -68,6 +74,11 @@ impl State {
                 unimplemented!()
             }
         }
+    }
+
+    /// Extracts a Term from a given location in the heap.
+    pub fn extract_term_from(&self, idx: usize) -> Result<Term, Error> {
+        self.extract_term(self.heap[idx], Some(idx))
     }
 }
 

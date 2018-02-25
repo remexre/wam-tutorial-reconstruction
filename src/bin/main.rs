@@ -1,6 +1,7 @@
 //! A REPL and interpreter for the various machines in "Warren's Abstract
 //! Machine: A Tutorial Reconstruction."
 
+#[macro_use]
 extern crate failure;
 extern crate linefeed;
 extern crate nom;
@@ -20,21 +21,29 @@ use options::Options;
 
 fn main() {
     let options = Options::from_args();
-    let machine = options.machine.new_machine();
-    if let Some(expr) = options.expr {
-        match run_query(&*machine, &expr) {
-            Ok(result) => unimplemented!("{:?}", result),
-            Err(err) => {
-                eprintln!("{}", err);
-                std::process::exit(1);
-            }
+    match run(options) {
+        Ok(()) => {}
+        Err(err) => {
+            eprintln!("{}", err);
+            std::process::exit(1);
         }
+    }
+}
+
+fn run(options: Options) -> Result<(), Error> {
+    let machine = options.machine.new_machine()?;
+    if let Some(expr) = options.expr {
+        run_query(&*machine, &expr)
     } else {
-        let mut reader = Reader::new(Options::clap().get_name().to_string())
-            .expect("Couldn't start the REPL");
+        let mut reader = Reader::new(Options::clap().get_name().to_string())?;
         std::env::home_dir()
             .and_then(|home| {
-                linefeed::inputrc::parse_file(&home.join(".inputrc"))
+                let inputrc = home.join(".inputrc");
+                if inputrc.exists() {
+                    linefeed::inputrc::parse_file(&inputrc)
+                } else {
+                    None
+                }
             })
             .map(|ds| reader.evaluate_directives(ds));
 
@@ -43,7 +52,7 @@ fn main() {
             // Read a line of input.
             reader.set_prompt(if query_buf.len() == 0 { "?- " } else { "   " });
             match reader.read_line().expect("Couldn't read a line") {
-                ReadResult::Eof => break,
+                ReadResult::Eof => break Ok(()),
                 ReadResult::Input(s) => {
                     query_buf += &s;
                     reader.add_history(s);

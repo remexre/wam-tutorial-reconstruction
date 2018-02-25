@@ -6,12 +6,12 @@ version = "0.1.0"
 
 [dependencies]
 failure = "0.1.1"
+lazy_static = "1.0.0"
 linefeed = "0.4.0"
 nom = { version = "3.2.1", features = ["verbose-errors"] }
+regex = "0.2.6"
 structopt = "0.2.3"
 symbol = "0.1.1"
-regex = "0.2.6"
-lazy_static = "1.0.0"
 
 [[bin]]
 name = "wam"

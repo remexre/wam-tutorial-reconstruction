@@ -26,9 +26,6 @@ use common::Term;
 
 /// A trait for an abstract machine based on CESK semantics.
 pub trait Machine {
-    /// Compiles a program.
-    fn compile(&self) -> Result<(), Error>;
-
     /// Runs a query against the program.
     fn run_query(&self, query: Vec<Term>) -> Result<(), Error>;
 }

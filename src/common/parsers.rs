@@ -72,6 +72,9 @@ named!(pub functor(&str) -> Functor, remove_whitespace_and_comments!(do_parse!(
     ( Functor(atom, arity) )
 )));
 
+named!(pub program(&str) -> Vec<Clause>,
+    remove_whitespace_and_comments!(many0!(clause)));
+
 named!(pub query(&str) -> Vec<Term>, remove_whitespace_and_comments!(do_parse!(
     terms: separated_list!(tag_s!(","), term) >>
     tag_s!(".") >>

@@ -13,4 +13,8 @@ pub enum Instruction {
     PutStructure(Functor, usize),
     SetVariable(usize),
     SetValue(usize),
+
+    GetStructure(Functor, usize),
+    UnifyVariable(usize),
+    UnifyValue(usize),
 }

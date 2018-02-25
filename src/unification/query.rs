@@ -1,112 +1,62 @@
 use std::collections::HashSet;
 
-use common::{Atom, Env, Functor, Term, Variable};
-use unification::control::Instruction;
+use common::{FlatTerm, FlatTermValue, Functor};
 
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum FlatTermValue {
-    Structure(Atom, Vec<usize>),
-    Variable,
-}
+use super::control::Instruction;
 
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct FlatTerm(pub Vec<FlatTermValue>);
+/// Compiles a term into instructions that will construct the term on the
+/// heap, storing the root into the given register number.
+pub fn compile_query(flat: &FlatTerm, base: usize) -> Vec<Instruction> {
+    let mut instrs = Vec::with_capacity(flat.0.len());
+    let mut seen = HashSet::with_capacity(flat.0.len());
 
-impl FlatTerm {
-    /// Converts a Term into this flattened form.
-    pub fn flatten_term(term: Term) -> FlatTerm {
-        fn flatten_term_onto(
-            regs: &mut Vec<FlatTermValue>,
-            env: &mut Env<Variable, usize>,
-            term: Term,
-        ) -> usize {
-            match term {
-                Term::Anonymous => {
-                    let n = regs.len();
-                    regs.push(FlatTermValue::Variable);
-                    n
+    fn compile(
+        flattened: &[FlatTermValue],
+        instrs: &mut Vec<Instruction>,
+        seen: &mut HashSet<usize>,
+        base: usize,
+        i: usize,
+    ) -> usize {
+        let n = base + i;
+        match flattened[i] {
+            FlatTermValue::Structure(atom, ref subterms) => {
+                instrs.push(Instruction::PutStructure(
+                    Functor(atom, subterms.len()),
+                    n,
+                ));
+                for &i in subterms {
+                    compile(flattened, instrs, seen, base, i);
                 }
-                Term::Structure(f, ts) => {
-                    // Store the index at which the value will be stored.
-                    let n = regs.len();
-
-                    // Push a temporary.
-                    regs.push(FlatTermValue::Variable);
-
-                    // Flatten all the subterms.
-                    let flat_terms = ts.into_iter()
-                        .map(|t| flatten_term_onto(regs, env, t))
-                        .collect();
-
-                    // Actually put the flat term value into the registers.
-                    assert!(regs[n] == FlatTermValue::Variable);
-                    regs[n] = FlatTermValue::Structure(f, flat_terms);
-
-                    // Return the index.
-                    n
-                }
-                Term::Variable(v) => if let Some(&n) = env.get(v) {
-                    n
+            }
+            FlatTermValue::Variable => {
+                if seen.contains(&i) {
+                    instrs.push(Instruction::SetValue(n));
                 } else {
-                    let n = regs.len();
-                    regs.push(FlatTermValue::Variable);
-                    env.push(v, n);
-                    n
-                },
-            }
-        }
-
-        let mut regs = Vec::new();
-        let mut env = Env::new();
-        flatten_term_onto(&mut regs, &mut env, term);
-        FlatTerm(regs)
-    }
-
-    /// Compiles a term into instructions that will construct the term on the
-    /// heap, storing the root into the given register number.
-    pub fn compile(&self, base: usize) -> Vec<Instruction> {
-        let mut instrs = Vec::with_capacity(self.0.len());
-        let mut seen = HashSet::with_capacity(self.0.len());
-        for (i, ft) in self.0.iter().enumerate() {
-            seen.insert(i);
-            match *ft {
-                FlatTermValue::Structure(atom, ref subterms) => {
-                    unimplemented!()
+                    instrs.push(Instruction::SetVariable(n));
                 }
-                FlatTermValue::Variable => unimplemented!(),
             }
         }
-        instrs
+        seen.insert(i);
+        n
     }
+
+    for i in 0..flat.0.len() {
+        compile(&flat.0, &mut instrs, &mut seen, base, i);
+    }
+    assert_eq!(seen.len(), flat.0.len());
+    instrs
 }
 
 #[cfg(test)]
 mod tests {
+    use common::FlatTerm;
     use super::*;
     use test_utils::example_term;
 
     #[test]
-    fn flattens_example_term() {
-        let term = example_term();
-        let flat = FlatTerm::flatten_term(term);
-
-        assert_eq!(
-            flat,
-            FlatTerm(vec![
-                FlatTermValue::Structure("p".into(), vec![1, 2, 4]),
-                FlatTermValue::Variable,
-                FlatTermValue::Structure("h".into(), vec![1, 3]),
-                FlatTermValue::Variable,
-                FlatTermValue::Structure("f".into(), vec![3]),
-            ])
-        );
-    }
-
-    #[test]
     fn compiles_example_term() {
-        let term = example_term();
-        let flat = FlatTerm::flatten_term(term);
-        let code = flat.compile(1);
+        let query = FlatTerm::flatten_term(example_term());
+        let code = compile_query(&query, 1);
 
         assert_eq!(
             code,

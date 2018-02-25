@@ -1,4 +1,4 @@
-use common::{Atom, Clause, Functor, Term, Variable};
+use common::{Atom, Clause, Functor, Term};
 use common::parsers::{atom, clause, functor, query, term, variable};
 use test_utils::example_term;
 
