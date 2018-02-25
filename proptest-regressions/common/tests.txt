@@ -1,9 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-xs 290861664 3301944456 3418009070 1746183809 # shrinks to atom = Atom(Symbol("𝄩"))
-xs 1768161427 2090961718 3964063294 3525182663 # shrinks to functor = Functor(Atom(Symbol("𐎀")), 0)
-xs 4175595369 337645745 1993206856 4067000633 # shrinks to functor = Functor(Atom(Symbol("aa")), 0)

@@ -1,23 +1,6 @@
 use proptest::prelude::*;
 
 use common::{Atom, Clause, Functor, Term, Variable};
-use test_utils::example_term;
-
-#[test]
-fn term_contains() {
-    let term = example_term();
-
-    assert!(term.contains(&term));
-
-    assert!(term.contains(&Term::Variable(variable!("Z"))));
-    assert!(!term.contains(&Term::Variable(variable!("Y"))));
-
-    assert!(term.contains(&Term::Structure(
-        "f".into(),
-        vec![Term::Variable(variable!("W"))]
-    )));
-    assert!(!term.contains(&Term::Structure("f".into(), vec![])));
-}
 
 prop_compose! {
     fn arb_atom()(s in "\\PC*") -> Atom {
@@ -48,18 +31,28 @@ fn arb_term(max_functor_arity: usize, max_depth: usize) -> BoxedStrategy<Term> {
         max_depth as u32,
         (max_functor_arity * max_depth) as u32,
         max_functor_arity as u32,
-        move |inner| arb_atom().prop_flat_map(move |atom| {
-            prop::collection::vec(inner.clone(), 0..max_functor_arity)
-                .prop_map(move |subterms| Term::Structure(atom, subterms))
-        })).boxed()
+        move |inner| {
+            arb_atom().prop_flat_map(move |atom| {
+                prop::collection::vec(inner.clone(), 0..max_functor_arity)
+                    .prop_map(move |subterms| Term::Structure(atom, subterms))
+            })
+        },
+    )
+        .boxed()
 }
 
-fn arb_clause(max_functor_arity: usize, max_term_depth: usize, max_clause_depth: usize) -> BoxedStrategy<Clause> {
-    arb_term(max_functor_arity, max_term_depth).prop_flat_map(move |head| {
-        let term = arb_term(max_functor_arity, max_term_depth);
-        prop::collection::vec(term, 0..max_clause_depth)
-            .prop_map(move |tail| Clause(head.clone(), tail))
-    }).boxed()
+fn arb_clause(
+    max_functor_arity: usize,
+    max_term_depth: usize,
+    max_clause_depth: usize,
+) -> BoxedStrategy<Clause> {
+    arb_term(max_functor_arity, max_term_depth)
+        .prop_flat_map(move |head| {
+            let term = arb_term(max_functor_arity, max_term_depth);
+            prop::collection::vec(term, 0..max_clause_depth)
+                .prop_map(move |tail| Clause(head.clone(), tail))
+        })
+        .boxed()
 }
 
 proptest! {

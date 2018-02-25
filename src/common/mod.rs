@@ -1,23 +1,91 @@
 //! Common code used by multiple chapters.
 
 mod env;
-mod parser;
+pub mod parsers;
 #[cfg(test)]
 mod tests;
 
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter, Result as FmtResult, Write};
 
+use nom::{Err as NomErr, IError, IResult, Needed};
 use regex::Regex;
 use symbol::Symbol;
 
 pub use common::env::Env;
 
+/// An error while parsing.
+#[derive(Clone, Debug, Fail, PartialEq)]
+pub enum ParseError {
+    Error(Option<usize>),
+    Incomplete(Needed),
+}
+
+impl ParseError {
+    /// Creates a ParseError from a `nom::IError` and the input.
+    pub fn from_ierror(err: IError<&str>, src: &str) -> ParseError {
+        fn find_position(err: NomErr<&str>) -> Option<&str> {
+            match err {
+                NomErr::Code(_) => None,
+                NomErr::Node(_, errs) => unimplemented!(),
+                NomErr::Position(_, pos) => Some(pos),
+                NomErr::NodePosition(_, pos, _) => Some(pos),
+            }
+        }
+
+        match err {
+            IError::Incomplete(needed) => ParseError::Incomplete(needed),
+            IError::Error(err) => ParseError::Error(
+                find_position(err).map(|pos| src.len() - pos.len()),
+            ),
+        }
+    }
+
+    /// Converts a `nom::IResult` to a `Result`.
+    pub fn from_iresult<T>(
+        res: IResult<&str, T>,
+        src: &str,
+    ) -> Result<T, ParseError> {
+        let res = match res {
+            IResult::Done("", val) => Ok(val),
+            IResult::Done(pos, _) => {
+                return Err(ParseError::Error(Some(src.len() - pos.len())));
+            }
+            IResult::Incomplete(needed) => Err(IError::Incomplete(needed)),
+            IResult::Error(err) => Err(IError::Error(err)),
+        };
+        res.map_err(|err| ParseError::from_ierror(err, src))
+    }
+}
+
+impl Display for ParseError {
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        match *self {
+            ParseError::Error(Some(n)) => {
+                write!(fmt, "Parse error at character {}", n)
+            }
+            ParseError::Error(None) => fmt.write_str("Parse error"),
+            ParseError::Incomplete(Needed::Unknown) => {
+                fmt.write_str("Incomplete input")
+            }
+            ParseError::Incomplete(Needed::Size(size)) => {
+                write!(fmt, "Incomplete input ({} characters needed)", size)
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Atom(pub Symbol);
 
 impl AsRef<str> for Atom {
-    fn as_ref(&self) -> &str{ self.0.as_ref() }
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+fn is_quoted_plain_char(ch: char) -> bool {
+    (' ' <= ch && ch <= '~') && (ch != '\'' && ch != '\\')
 }
 
 impl Display for Atom {
@@ -31,7 +99,7 @@ impl Display for Atom {
         } else {
             fmt.write_char('\'')?;
             for ch in atom.chars() {
-                if parser::is_quoted_plain_char(ch) {
+                if is_quoted_plain_char(ch) {
                     fmt.write_char(ch)?;
                 } else {
                     match ch {
@@ -110,7 +178,9 @@ impl Variable {
 }
 
 impl AsRef<str> for Variable {
-    fn as_ref(&self) -> &str{ self.0.as_ref() }
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
 }
 
 impl Display for Variable {
@@ -155,18 +225,22 @@ impl Display for Term {
             Term::Anonymous => fmt.write_char('_'),
             Term::Structure(ref atom, ref args) => {
                 Display::fmt(atom, fmt)?;
-                fmt.write_char('(')?;
-                let mut first = true;
-                for arg in args {
-                    if first {
-                        first = false;
-                    } else {
-                        fmt.write_str(", ")?;
+                if args.is_empty() {
+                    Ok(())
+                } else {
+                    fmt.write_char('(')?;
+                    let mut first = true;
+                    for arg in args {
+                        if first {
+                            first = false;
+                        } else {
+                            fmt.write_str(", ")?;
+                        }
+                        Display::fmt(arg, fmt)?;
                     }
-                    Display::fmt(arg, fmt)?;
+                    fmt.write_char(')')
                 }
-                fmt.write_char(')')
-            },
+            }
             Term::Variable(ref v) => Display::fmt(v, fmt),
         }
     }

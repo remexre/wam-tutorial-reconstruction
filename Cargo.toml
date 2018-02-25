@@ -1,5 +1,6 @@
 [package]
 authors = ["Nathan Ringo <remexre@gmail.com>"]
+description = "A Rust implementation of the machines in \"Warren's Abstract Machine: A Tutorial Reconstruction.\""
 name = "wam-tutorial-reconstruction"
 version = "0.1.0"
 
@@ -14,7 +15,7 @@ lazy_static = "1.0.0"
 
 [[bin]]
 name = "wam"
-path = "src/main.rs"
+path = "src/bin/main.rs"
 
 [dev-dependencies]
 proptest = "0.5.0"

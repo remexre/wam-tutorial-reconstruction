@@ -3,12 +3,11 @@
 //! Currently does not support:
 //!
 //!  - Infix operators
-//!  - Octal escapes
 
 use std::char;
 use std::str::FromStr;
 
-use nom::{digit, hex_digit, multispace, IError, IResult, Needed};
+use nom::{digit, hex_digit, multispace, IResult, Needed};
 
 use common::{Atom, Clause, Functor, Term, Variable};
 
@@ -16,8 +15,8 @@ macro_rules! from_str {
     ($($(#[$meta:meta])* $parser:ident => $ty:ty),*$(,)*) => {
         $(impl $ty {
             $(#[$meta])*
-            pub fn parse(s: &str) -> Result<Self, IError<&str>> {
-                $parser(s).to_full_result()
+            pub fn parse(s: &str) -> Result<Self, $crate::common::ParseError> {
+                $crate::common::ParseError::from_iresult($parser(s), s)
             }
         })*
     }
@@ -52,7 +51,7 @@ macro_rules! remove_whitespace_and_comments {
 
 // The "basic" common types.
 
-named!(atom(&str) -> Atom, remove_whitespace_and_comments!(alt!(
+named!(pub atom(&str) -> Atom, remove_whitespace_and_comments!(alt!(
     map!(
         delimited!(tag_s!("'"), many0!(atom_quoted_char), tag_s!("'")),
         |cs| Atom::from(cs.into_iter().filter_map(|x| x).collect::<String>())
@@ -60,20 +59,26 @@ named!(atom(&str) -> Atom, remove_whitespace_and_comments!(alt!(
     map!(unquoted_atom, |cs| cs.into())
 )));
 
-named!(clause(&str) -> Clause, remove_whitespace_and_comments!(do_parse!(
+named!(pub clause(&str) -> Clause, remove_whitespace_and_comments!(do_parse!(
     clause: alt!(clause_rule | clause_fact) >>
     tag_s!(".") >>
     ( clause )
 )));
 
-named!(functor(&str) -> Functor, remove_whitespace_and_comments!(do_parse!(
+named!(pub functor(&str) -> Functor, remove_whitespace_and_comments!(do_parse!(
     atom: atom >>
     tag_s!("/") >>
     arity: map_res!(digit, FromStr::from_str) >>
     ( Functor(atom, arity) )
 )));
 
-named!(term(&str) -> Term, remove_whitespace_and_comments!(alt!(
+named!(pub query(&str) -> Vec<Term>, remove_whitespace_and_comments!(do_parse!(
+    terms: separated_list!(tag_s!(","), term) >>
+    tag_s!(".") >>
+    ( terms )
+)));
+
+named!(pub term(&str) -> Term, remove_whitespace_and_comments!(alt!(
     map!(variable, |s| if s == "_" {
         Term::Anonymous
     } else {
@@ -81,7 +86,7 @@ named!(term(&str) -> Term, remove_whitespace_and_comments!(alt!(
     }) | term_structure
 )));
 
-named!(variable(&str) -> &str, remove_whitespace_and_comments!(recognize!(tuple!(
+named!(pub variable(&str) -> &str, remove_whitespace_and_comments!(recognize!(tuple!(
     take_while1_s!(is_variable_start_char),
     take_while_s!(is_plain_char)
 ))));
@@ -110,7 +115,7 @@ named!(atom_quoted_char(&str) -> Option<char>, alt_complete!(
     value!(Some('\''), tag_s!("\\'")) |
     value!(Some('"'), tag_s!("\\\"")) |
     value!(Some('`'), tag_s!("\\`")) |
-    map!(verify!(one_char, is_quoted_plain_char), Some)
+    map!(verify!(one_char, |ch| ch != '\\' && ch != '\''), Some)
 ));
 
 named!(atom_quoted_hex_escape(&str) -> char, map_opt!(alt!(
@@ -145,10 +150,11 @@ named!(clause_rule(&str) -> Clause, do_parse!(
 
 named!(term_structure(&str) -> Term, do_parse!(
     atom: atom >>
-    tag_s!("(") >>
-    subterms: separated_list!(tag_s!(","), term) >>
-    tag_s!(")") >>
-    ( Term::Structure(atom, subterms) )
+    subterms: opt!(complete!(delimited!(
+        tag_s!("("),
+        separated_list!(tag_s!(","), term),
+        tag_s!(")")))) >>
+    ( Term::Structure(atom, subterms.unwrap_or_else(Vec::new)) )
 ));
 
 // Helper functions.
@@ -169,10 +175,8 @@ fn is_variable_start_char(ch: char) -> bool {
 }
 
 fn is_plain_char(ch: char) -> bool {
-    ('A' <= ch && ch <= 'Z') ||
-    ('a' <= ch && ch <= 'z') ||
-    ('0' <= ch && ch <= '9') ||
-    ch == '_'
+    ('A' <= ch && ch <= 'Z') || ('a' <= ch && ch <= 'z')
+        || ('0' <= ch && ch <= '9') || ch == '_'
 }
 
 fn one_char(input: &str) -> IResult<&str, char> {
@@ -181,8 +185,4 @@ fn one_char(input: &str) -> IResult<&str, char> {
         Some(ch) => IResult::Done(iter.as_str(), ch),
         None => IResult::Incomplete(Needed::Size(1)),
     }
-}
-
-pub fn is_quoted_plain_char(ch: char) -> bool {
-    ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ch == '_' || ch == ' '
 }

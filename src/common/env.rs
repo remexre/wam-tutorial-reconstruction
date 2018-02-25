@@ -36,7 +36,9 @@ impl<K: Eq, V> Env<K, V> {
     }
 
     pub fn with<F, U>(&mut self, k: K, v: V, f: F) -> U
-    where F: FnOnce(&mut Env<K, V>) -> U {
+    where
+        F: FnOnce(&mut Env<K, V>) -> U,
+    {
         self.push(k, v);
         let u = f(self);
         self.pop(1);
