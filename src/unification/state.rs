@@ -39,7 +39,7 @@ impl State {
     {
         let n = self.next_addr();
         let n2 = self.push(f(n));
-        debug_assert_eq!(n, n2);
+        assert_eq!(n, n2);
         n2
     }
 
@@ -53,25 +53,26 @@ impl State {
     ) -> Result<Term, Error> {
         match cell {
             HeapCell::Functor(f) => {
-                bail!("Found functor {} where a term was expected", f)
+                bail!("Found functor data {} where a term was expected", f)
             }
             HeapCell::Ref(n) => if idx.map(|i| n == i).unwrap_or(false) {
-                Ok(Term::Variable(
-                    Variable::from_str(format!("_{}", n)).unwrap(),
-                ))
+                let var = Variable::from_str(format!("_{}", n)).unwrap();
+                Ok(Term::Variable(var))
             } else {
                 self.extract_term_from(n)
             },
             HeapCell::Str(f_idx) => {
-                let functor = match self.heap[f_idx] {
+                let Functor(atom, arity) = match self.heap[f_idx] {
                     HeapCell::Functor(f) => f,
                     cell => {
                         bail!("Found {:?} where functor was expected", cell)
                     }
                 };
-                println!("{}", functor);
-                //
-                unimplemented!()
+                let mut subterms = vec![];
+                for i in 0..arity {
+                    subterms.push(self.extract_term_from(f_idx + i + 1)?);
+                }
+                Ok(Term::Structure(atom, subterms))
             }
         }
     }

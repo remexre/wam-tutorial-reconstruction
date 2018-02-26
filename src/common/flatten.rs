@@ -7,7 +7,7 @@ pub enum FlatTermValue {
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct FlatTerm(pub Vec<FlatTermValue>);
+pub struct FlatTerm(pub Vec<(usize, FlatTermValue)>);
 
 impl FlatTerm {
     /// Converts a Term into this flattened form.
@@ -56,7 +56,33 @@ impl FlatTerm {
         let mut regs = Vec::new();
         let mut env = Env::new();
         flatten_term_onto(&mut regs, &mut env, term);
-        FlatTerm(regs)
+        drop(env);
+
+        // This is just a topological sort implemented as a depth-first search.
+        fn visit(
+            out: &mut Vec<(usize, FlatTermValue)>,
+            flats: &mut Vec<Option<FlatTermValue>>,
+            current: usize,
+        ) {
+            if flats[current].is_none() {
+                return;
+            }
+            let val = flats[current].take().unwrap();
+            if let FlatTermValue::Structure(_, ref args) = val {
+                for &arg in args {
+                    visit(out, flats, arg);
+                }
+            }
+            out.push((current, val));
+        }
+
+        let mut regs = regs.into_iter().map(Some).collect::<Vec<_>>();
+        let mut sorted = Vec::new();
+        for i in 0..regs.len() {
+            visit(&mut sorted, &mut regs, i);
+        }
+        assert_eq!(regs.len(), sorted.len());
+        FlatTerm(sorted)
     }
 }
 
@@ -74,11 +100,11 @@ mod tests {
         assert_eq!(
             flat,
             FlatTerm(vec![
-                FlatTermValue::Structure("p".into(), vec![1, 2, 4]),
-                FlatTermValue::Variable,
-                FlatTermValue::Structure("h".into(), vec![1, 3]),
-                FlatTermValue::Variable,
-                FlatTermValue::Structure("f".into(), vec![3]),
+                (2, FlatTermValue::Structure("h".into(), vec![1, 3])),
+                (1, FlatTermValue::Variable),
+                (3, FlatTermValue::Variable),
+                (4, FlatTermValue::Structure("f".into(), vec![3])),
+                (0, FlatTermValue::Structure("p".into(), vec![1, 2, 4])),
             ])
         );
     }

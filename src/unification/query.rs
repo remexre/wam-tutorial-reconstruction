@@ -11,30 +11,27 @@ pub fn compile_query(flat: &FlatTerm, base: usize) -> Vec<Instruction> {
     let mut seen = HashSet::with_capacity(flat.0.len());
 
     fn compile(
-        flattened: &[FlatTermValue],
+        flattened: &[(usize, FlatTermValue)],
         instrs: &mut Vec<Instruction>,
         seen: &mut HashSet<usize>,
         base: usize,
         i: usize,
     ) -> usize {
         let n = base + i;
-        match flattened[i] {
+        match flattened[i].1 {
             FlatTermValue::Structure(atom, ref subterms) => {
-                instrs.push(Instruction::PutStructure(
-                    Functor(atom, subterms.len()),
-                    n,
-                ));
+                instrs.push(
+                    Instruction::PutStructure(Functor(atom, subterms.len()), n),
+                );
                 for &i in subterms {
                     compile(flattened, instrs, seen, base, i);
                 }
             }
-            FlatTermValue::Variable => {
-                if seen.contains(&i) {
-                    instrs.push(Instruction::SetValue(n));
-                } else {
-                    instrs.push(Instruction::SetVariable(n));
-                }
-            }
+            FlatTermValue::Variable => if seen.contains(&i) {
+                instrs.push(Instruction::SetValue(n));
+            } else {
+                instrs.push(Instruction::SetVariable(n));
+            },
         }
         seen.insert(i);
         n

@@ -57,14 +57,18 @@ impl Machine {
     /// Runs an instruction.
     pub fn run_instruction(&mut self, instr: Instruction) {
         match instr {
-            Instruction::PutStructure(Functor(_atom, _arity), _reg) => {
-                unimplemented!()
-            }
-            Instruction::SetValue(reg) => {
-                let n = self.s.push_with(|n| HeapCell::Ref(n));
-                self.e[reg] = self.s.get(n);
+            Instruction::PutStructure(functor, reg) => {
+                let n = self.s.push_with(|n| HeapCell::Str(n + 1));
+                self.s.push(HeapCell::Functor(functor));
+                let val = self.s.get(n);
+                self.set_or_add_register(reg, val);
             }
             Instruction::SetVariable(reg) => {
+                let n = self.s.push_with(|n| HeapCell::Ref(n));
+                let val = self.s.get(n);
+                self.set_or_add_register(reg, val);
+            }
+            Instruction::SetValue(reg) => {
                 self.s.push(self.e[reg]);
             }
 
@@ -73,6 +77,14 @@ impl Machine {
             }
             Instruction::UnifyVariable(_reg) => unimplemented!(),
             Instruction::UnifyValue(_reg) => unimplemented!(),
+        }
+    }
+
+    fn set_or_add_register(&mut self, n: usize, val: HeapCell) {
+        if self.e.len() == n {
+            self.e.push(val);
+        } else {
+            self.e[n] = val;
         }
     }
 }
@@ -92,16 +104,25 @@ mod tests {
 
     use super::*;
 
+    fn compile_query_roundtrip(term: Term) -> Term {
+        let mut machine = Machine::empty();
+        println!("===== {} =====", term);
+        let flat = FlatTerm::flatten_term(term);
+        for instr in compile_query(&flat, 0) {
+            println!("{}", instr);
+            machine.run_instruction(instr);
+        }
+        println!("----------");
+        machine.s.extract_term(machine.e[0], None).unwrap()
+    }
+
     proptest!{
         #[test]
-        fn query_compile(ref term in arb_term(5, 10)) {
-            let mut machine = Machine::empty();
-            let query = FlatTerm::flatten_term(term.clone());
-            for instr in compile_query(&query, 1) {
-                machine.run_instruction(instr);
-            }
-            let term2 = machine.s.extract_term(machine.e[1], None).unwrap();
-            assert_eq!(term, &term2);
+        fn query_compile_idempotency(ref term in arb_term(5, 10)) {
+            let term = term.clone();
+            let term2 = compile_query_roundtrip(term);
+            //let term3 = compile_query_roundtrip(term);
+            //assert_eq!(term2, term3);
         }
     }
 }
