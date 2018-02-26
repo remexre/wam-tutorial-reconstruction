@@ -119,10 +119,9 @@ mod tests {
     proptest!{
         #[test]
         fn query_compile_idempotency(ref term in arb_term(5, 10)) {
-            let term = term.clone();
-            let term2 = compile_query_roundtrip(term);
-            //let term3 = compile_query_roundtrip(term);
-            //assert_eq!(term2, term3);
+            let term2 = compile_query_roundtrip(term.clone());
+            let term3 = compile_query_roundtrip(term2.clone());
+            assert_eq!(term2, term3);
         }
     }
 }

@@ -17,24 +17,7 @@ pub fn compile_query(flat: &FlatTerm, base: usize) -> Vec<Instruction> {
         base: usize,
         i: usize,
     ) -> usize {
-        let n = base + i;
-        match flattened[i].1 {
-            FlatTermValue::Structure(atom, ref subterms) => {
-                instrs.push(
-                    Instruction::PutStructure(Functor(atom, subterms.len()), n),
-                );
-                for &i in subterms {
-                    compile(flattened, instrs, seen, base, i);
-                }
-            }
-            FlatTermValue::Variable => if seen.contains(&i) {
-                instrs.push(Instruction::SetValue(n));
-            } else {
-                instrs.push(Instruction::SetVariable(n));
-            },
-        }
-        seen.insert(i);
-        n
+        unimplemented!()
     }
 
     for i in 0..flat.0.len() {
@@ -46,7 +29,6 @@ pub fn compile_query(flat: &FlatTerm, base: usize) -> Vec<Instruction> {
 
 #[cfg(test)]
 mod tests {
-    use common::FlatTerm;
     use super::*;
     use test_utils::example_term;
 

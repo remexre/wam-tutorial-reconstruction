@@ -64,16 +64,14 @@ impl FlatTerm {
             flats: &mut Vec<Option<FlatTermValue>>,
             current: usize,
         ) {
-            if flats[current].is_none() {
-                return;
-            }
-            let val = flats[current].take().unwrap();
-            if let FlatTermValue::Structure(_, ref args) = val {
-                for &arg in args {
-                    visit(out, flats, arg);
+            if let Some(val) = flats[current].take() {
+                if let FlatTermValue::Structure(_, ref args) = val {
+                    for &arg in args {
+                        visit(out, flats, arg);
+                    }
                 }
+                out.push((current, val));
             }
-            out.push((current, val));
         }
 
         let mut regs = regs.into_iter().map(Some).collect::<Vec<_>>();
@@ -100,9 +98,9 @@ mod tests {
         assert_eq!(
             flat,
             FlatTerm(vec![
-                (2, FlatTermValue::Structure("h".into(), vec![1, 3])),
                 (1, FlatTermValue::Variable),
                 (3, FlatTermValue::Variable),
+                (2, FlatTermValue::Structure("h".into(), vec![1, 3])),
                 (4, FlatTermValue::Structure("f".into(), vec![3])),
                 (0, FlatTermValue::Structure("p".into(), vec![1, 2, 4])),
             ])

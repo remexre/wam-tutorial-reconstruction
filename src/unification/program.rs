@@ -9,7 +9,6 @@ pub fn compile_program(flat: &FlatTerm) -> Vec<Instruction> {
 
 #[cfg(test)]
 mod tests {
-    //use common::FlatTerm;
     use super::*;
     use test_utils::example_term;
 
