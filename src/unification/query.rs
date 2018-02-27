@@ -44,8 +44,8 @@ fn compile_visitor(
 /// heap, storing the root into the given register number.
 pub fn compile_query(term: Term) -> Vec<Instruction> {
     let mut flat = term.flatten().0.into_iter().map(Some).collect::<Vec<_>>();
-    let mut code = Vec::with_capacity(flat.len());
     let mut seen = HashSet::with_capacity(flat.len());
+    let mut code = Vec::new();
 
     for i in 0..flat.len() {
         compile_visitor(&mut code, &mut seen, &mut flat, i);
@@ -68,19 +68,19 @@ pub fn compile_query(term: Term) -> Vec<Instruction> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test_utils::example_term;
+    use test_utils::example_query_term;
 
     #[test]
     fn compiles_example_term() {
         assert_eq!(
-            compile_query(example_term()),
+            compile_query(example_query_term()),
             vec![
-                Instruction::PutStructure(Functor("h".into(), 2), 2),
+                Instruction::PutStructure(functor!(h / 2), 2),
                 Instruction::SetVariable(1),
                 Instruction::SetVariable(4),
-                Instruction::PutStructure(Functor("f".into(), 1), 3),
+                Instruction::PutStructure(functor!(f / 1), 3),
                 Instruction::SetValue(4),
-                Instruction::PutStructure(Functor("p".into(), 3), 0),
+                Instruction::PutStructure(functor!(p / 3), 0),
                 Instruction::SetValue(1),
                 Instruction::SetValue(2),
                 Instruction::SetValue(3),

@@ -5,17 +5,24 @@ use common::{Functor, Term, Variable};
 #[derive(Debug)]
 pub struct State {
     heap: Vec<HeapCell>,
+    pub mode: Mode,
 }
 
 impl State {
     /// Creates a new, empty State.
     pub fn new() -> State {
-        State { heap: Vec::new() }
+        State {
+            mode: Mode::Write,
+            heap: Vec::new(),
+        }
     }
 
-    /// Deletes the contents of the heap.
-    pub fn clear(&mut self) {
-        self.heap.clear();
+    /// Recursively retrieves a value from a heap cell.
+    pub fn deref(&self, addr: usize) -> HeapCell {
+        match self.get(addr) {
+            HeapCell::Ref(a) if a != addr => self.deref(a),
+            cell => cell,
+        }
     }
 
     /// Retrieves the value of a heap cell. Panics if the address is out of
@@ -51,20 +58,16 @@ impl State {
     /// Extracts a Term from the given HeapCell, which may be from a register.
     /// If it is not, the heap index of the cell should be passed in as the
     /// last argument.
-    pub fn extract_term(
-        &self,
-        cell: HeapCell,
-        idx: Option<usize>,
-    ) -> Result<Term, Error> {
-        match cell {
+    pub fn extract_term(&self, idx: usize) -> Result<Term, Error> {
+        match self.heap[idx] {
             HeapCell::Functor(f) => {
                 bail!("Found functor data {} where a term was expected", f)
             }
-            HeapCell::Ref(n) => if idx.map(|i| n == i).unwrap_or(false) {
+            HeapCell::Ref(n) => if idx == n {
                 let var = Variable::from_str(format!("_{}", n)).unwrap();
                 Ok(Term::Variable(var))
             } else {
-                self.extract_term_from(n)
+                self.extract_term(n)
             },
             HeapCell::Str(f_idx) => {
                 let Functor(atom, arity) = match self.heap[f_idx] {
@@ -75,16 +78,11 @@ impl State {
                 };
                 let mut subterms = vec![];
                 for i in 0..arity {
-                    subterms.push(self.extract_term_from(f_idx + i + 1)?);
+                    subterms.push(self.extract_term(f_idx + i + 1)?);
                 }
                 Ok(Term::Structure(atom, subterms))
             }
         }
-    }
-
-    /// Extracts a Term from a given location in the heap.
-    pub fn extract_term_from(&self, idx: usize) -> Result<Term, Error> {
-        self.extract_term(self.heap[idx], Some(idx))
     }
 }
 
@@ -93,4 +91,10 @@ pub enum HeapCell {
     Functor(Functor),
     Ref(usize),
     Str(usize),
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Mode {
+    Read,
+    Write,
 }

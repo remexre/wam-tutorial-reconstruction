@@ -5,6 +5,8 @@ pub mod state;
 mod program;
 mod query;
 
+use std::usize;
+
 use failure::Error;
 
 use common::{Functor, Term};
@@ -21,8 +23,8 @@ pub struct Machine {
     pub c: Control,
 
     /// The environment, which is currently just a growable sequence of indexed
-    /// registers, each of which contains a heap cell.
-    pub e: Vec<HeapCell>,
+    /// registers, each of which containing a heap address.
+    pub e: Vec<usize>,
 
     /// The state, which is the heap (aka the global stack).
     pub s: State,
@@ -35,9 +37,8 @@ pub struct Machine {
 impl Machine {
     /// Creates a new Machine, given the term to unify against.
     pub fn new(program: Term) -> Machine {
-        let /*mut*/ machine = Machine::empty();
-        eprintln!("TODO compile query");
-        // machine.c.code = compile_program(program.flatten());
+        let mut machine = Machine::empty();
+        machine.c.code = compile_program(program);
         machine
     }
 
@@ -60,16 +61,15 @@ impl Machine {
             Instruction::PutStructure(functor, reg) => {
                 let n = self.s.push_with(|n| HeapCell::Str(n + 1));
                 self.s.push(HeapCell::Functor(functor));
-                let val = self.s.get(n);
-                self.set_or_add_register(reg, val);
+                self.set_or_add_register(reg, n);
             }
             Instruction::SetVariable(reg) => {
                 let n = self.s.push_with(|n| HeapCell::Ref(n));
-                let val = self.s.get(n);
-                self.set_or_add_register(reg, val);
+                self.set_or_add_register(reg, n);
             }
             Instruction::SetValue(reg) => {
-                self.s.push(self.e[reg]);
+                let cell = self.s.get(self.e[reg]);
+                self.s.push(cell);
             }
 
             Instruction::GetStructure(Functor(_atom, _arity), _reg) => {
@@ -80,12 +80,11 @@ impl Machine {
         }
     }
 
-    fn set_or_add_register(&mut self, n: usize, val: HeapCell) {
+    fn set_or_add_register(&mut self, n: usize, addr: usize) {
         while self.e.len() <= n {
-            let i = self.e.len();
-            self.e.push(HeapCell::Ref(i));
+            self.e.push(usize::MAX);
         }
-        self.e[n] = val;
+        self.e[n] = addr;
     }
 }
 
@@ -97,13 +96,12 @@ impl ::Machine for Machine {
         let query = query.remove(0);
 
         self.e.clear();
-        self.s.clear();
 
         for instr in compile_query(query) {
             self.run_instruction(instr);
         }
 
-        bail!("{}", self.s.extract_term(self.e[0], None).unwrap())
+        bail!("{}", self.s.extract_term(self.e[0]).unwrap())
     }
 }
 
@@ -118,7 +116,7 @@ mod tests {
         for instr in compile_query(term) {
             machine.run_instruction(instr);
         }
-        machine.s.extract_term(machine.e[0], None).unwrap()
+        machine.s.extract_term(machine.e[0]).unwrap()
     }
 
     proptest!{

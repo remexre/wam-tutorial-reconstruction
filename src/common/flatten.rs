@@ -66,19 +66,19 @@ impl Term {
 
 #[cfg(test)]
 mod tests {
-    use test_utils::{arb_term, example_term};
+    use test_utils::{arb_term, example_query_term};
 
     use super::*;
 
     #[test]
     fn flattens_example_term() {
         assert_eq!(
-            example_term().flatten(),
+            example_query_term().flatten(),
             FlatTerm(vec![
-                FlatTermValue::Structure("p".into(), vec![1, 2, 3]),
+                FlatTermValue::Structure(atom!(p), vec![1, 2, 3]),
                 FlatTermValue::Variable,
-                FlatTermValue::Structure("h".into(), vec![1, 4]),
-                FlatTermValue::Structure("f".into(), vec![4]),
+                FlatTermValue::Structure(atom!(h), vec![1, 4]),
+                FlatTermValue::Structure(atom!(f), vec![4]),
                 FlatTermValue::Variable,
             ])
         );
@@ -105,7 +105,7 @@ mod tests {
                 ]
             ).flatten(),
             FlatTerm(vec![
-                FlatTermValue::Structure("foo".into(), vec![1, 1]),
+                FlatTermValue::Structure(atom!(foo), vec![1, 1]),
                 FlatTermValue::Variable,
             ])
         );

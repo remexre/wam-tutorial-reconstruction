@@ -16,19 +16,40 @@ macro_rules! parse_tests {
 }
 
 /// Returns the term `p(Z, h(Z, W), f(W))`.
-pub fn example_term() -> Term {
+pub fn example_query_term() -> Term {
     Term::Structure(
-        "p".into(),
+        atom!(p),
         vec![
             Term::Variable(variable!("Z")),
             Term::Structure(
-                "h".into(),
+                atom!(h),
                 vec![
                     Term::Variable(variable!("Z")),
                     Term::Variable(variable!("W")),
                 ],
             ),
-            Term::Structure("f".into(), vec![Term::Variable(variable!("W"))]),
+            Term::Structure(atom!(f), vec![Term::Variable(variable!("W"))]),
+        ],
+    )
+}
+
+/// Returns the term `p(f(X), h(Y, f(a)), Y)`.
+pub fn example_program_term() -> Term {
+    Term::Structure(
+        atom!(p),
+        vec![
+            Term::Structure(atom!(f), vec![Term::Variable(variable!("X"))]),
+            Term::Structure(
+                atom!(h),
+                vec![
+                    Term::Variable(variable!("Y")),
+                    Term::Structure(
+                        atom!(f),
+                        vec![Term::Structure(atom!(a), vec![])],
+                    ),
+                ],
+            ),
+            Term::Variable(variable!("Y")),
         ],
     )
 }
