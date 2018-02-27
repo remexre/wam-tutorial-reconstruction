@@ -13,6 +13,11 @@ impl State {
         State { heap: Vec::new() }
     }
 
+    /// Deletes the contents of the heap.
+    pub fn clear(&mut self) {
+        self.heap.clear();
+    }
+
     /// Retrieves the value of a heap cell. Panics if the address is out of
     /// bounds.
     pub fn get(&self, addr: usize) -> HeapCell {

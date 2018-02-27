@@ -1,5 +1,50 @@
 use super::{Atom, Env, Term, Variable};
 
+/// A breadth-first search to flatten a term.
+///
+/// This isn't able to be the (faster) depth-first search, since indices are
+/// assigned in traversal order.
+fn flatten_term_onto<'t>(
+    regs: &mut Vec<FlatTermValue>,
+    env: &mut Env<Variable, usize>,
+    i: usize,
+    term: &'t Term,
+) {
+    match *term {
+        Term::Anonymous => {
+            regs[i] = FlatTermValue::Variable;
+        }
+        Term::Structure(f, ref ts) => {
+            let mut is = Vec::new();
+            let mut subterms = Vec::new();
+            for t in ts.iter() {
+                if let Term::Variable(v) = *t {
+                    is.push(if let Some(&n) = env.get(v) {
+                        n
+                    } else {
+                        let n = regs.len();
+                        regs.push(FlatTermValue::Variable);
+                        env.push(v, n);
+                        n
+                    });
+                } else {
+                    let n = regs.len();
+                    regs.push(FlatTermValue::Variable);
+                    subterms.push((n, t));
+                    is.push(n);
+                }
+            }
+            regs[i] = FlatTermValue::Structure(f, is);
+            for (i, t) in subterms {
+                flatten_term_onto(regs, env, i, t);
+            }
+        }
+        Term::Variable(_) => {
+            regs[i] = FlatTermValue::Variable;
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum FlatTermValue {
     Structure(Atom, Vec<usize>),
@@ -7,103 +52,69 @@ pub enum FlatTermValue {
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct FlatTerm(pub Vec<(usize, FlatTermValue)>);
+pub struct FlatTerm(pub Vec<FlatTermValue>);
 
-impl FlatTerm {
-    /// Converts a Term into this flattened form.
-    pub fn flatten_term(term: Term) -> FlatTerm {
-        fn flatten_term_onto(
-            regs: &mut Vec<FlatTermValue>,
-            env: &mut Env<Variable, usize>,
-            term: Term,
-        ) -> usize {
-            match term {
-                Term::Anonymous => {
-                    let n = regs.len();
-                    regs.push(FlatTermValue::Variable);
-                    n
-                }
-                Term::Structure(f, ts) => {
-                    // Store the index at which the value will be stored.
-                    let n = regs.len();
-
-                    // Push a temporary.
-                    regs.push(FlatTermValue::Variable);
-
-                    // Flatten all the subterms.
-                    let flat_terms = ts.into_iter()
-                        .map(|t| flatten_term_onto(regs, env, t))
-                        .collect();
-
-                    // Actually put the flat term value into the registers.
-                    assert!(regs[n] == FlatTermValue::Variable);
-                    regs[n] = FlatTermValue::Structure(f, flat_terms);
-
-                    // Return the index.
-                    n
-                }
-                Term::Variable(v) => if let Some(&n) = env.get(v) {
-                    n
-                } else {
-                    let n = regs.len();
-                    regs.push(FlatTermValue::Variable);
-                    env.push(v, n);
-                    n
-                },
-            }
-        }
-
-        let mut regs = Vec::new();
+impl Term {
+    /// Converts a Term into a flattened form.
+    pub fn flatten(&self) -> FlatTerm {
+        let mut regs = vec![FlatTermValue::Variable];
         let mut env = Env::new();
-        flatten_term_onto(&mut regs, &mut env, term);
-        drop(env);
-
-        // This is just a topological sort implemented as a depth-first search.
-        fn visit(
-            out: &mut Vec<(usize, FlatTermValue)>,
-            flats: &mut Vec<Option<FlatTermValue>>,
-            current: usize,
-        ) {
-            if let Some(val) = flats[current].take() {
-                if let FlatTermValue::Structure(_, ref args) = val {
-                    for &arg in args {
-                        visit(out, flats, arg);
-                    }
-                }
-                out.push((current, val));
-            }
-        }
-
-        let mut regs = regs.into_iter().map(Some).collect::<Vec<_>>();
-        let mut sorted = Vec::new();
-        for i in 0..regs.len() {
-            visit(&mut sorted, &mut regs, i);
-        }
-        assert_eq!(regs.len(), sorted.len());
-        FlatTerm(sorted)
+        flatten_term_onto(&mut regs, &mut env, 0, self);
+        FlatTerm(regs)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use test_utils::example_term;
+    use test_utils::{arb_term, example_term};
 
     use super::*;
 
     #[test]
     fn flattens_example_term() {
-        let term = example_term();
-        let flat = FlatTerm::flatten_term(term);
-
         assert_eq!(
-            flat,
+            example_term().flatten(),
             FlatTerm(vec![
-                (1, FlatTermValue::Variable),
-                (3, FlatTermValue::Variable),
-                (2, FlatTermValue::Structure("h".into(), vec![1, 3])),
-                (4, FlatTermValue::Structure("f".into(), vec![3])),
-                (0, FlatTermValue::Structure("p".into(), vec![1, 2, 4])),
+                FlatTermValue::Structure("p".into(), vec![1, 2, 3]),
+                FlatTermValue::Variable,
+                FlatTermValue::Structure("h".into(), vec![1, 4]),
+                FlatTermValue::Structure("f".into(), vec![4]),
+                FlatTermValue::Variable,
             ])
         );
+    }
+
+    #[test]
+    fn flattens_simple_things() {
+        assert_eq!(
+            Term::Anonymous.flatten(),
+            FlatTerm(vec![FlatTermValue::Variable])
+        );
+
+        assert_eq!(
+            Term::Variable(variable!("X")).flatten(),
+            FlatTerm(vec![FlatTermValue::Variable])
+        );
+
+        assert_eq!(
+            Term::Structure(
+                "foo".into(),
+                vec![
+                    Term::Variable(variable!("X")),
+                    Term::Variable(variable!("X")),
+                ]
+            ).flatten(),
+            FlatTerm(vec![
+                FlatTermValue::Structure("foo".into(), vec![1, 1]),
+                FlatTermValue::Variable,
+            ])
+        );
+    }
+
+    proptest! {
+        #[test]
+        fn flatten_doesnt_crash(ref term in arb_term(5, 5)) {
+            term.flatten();
+        }
     }
 }

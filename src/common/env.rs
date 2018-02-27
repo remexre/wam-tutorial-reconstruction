@@ -11,6 +11,10 @@ impl<K: Eq, V> Env<K, V> {
         Env { vals: Vec::new() }
     }
 
+    pub fn contains<T: Borrow<K>>(&self, k: T) -> bool {
+        self.get(k).is_some()
+    }
+
     pub fn empty(&self) -> bool {
         self.vals.is_empty()
     }

@@ -3,7 +3,7 @@ use common::FlatTerm;
 use super::control::Instruction;
 
 /// Compiles a "program" (a term to unify against) into instructions.
-pub fn compile_program(flat: &FlatTerm) -> Vec<Instruction> {
+pub fn compile_program(flat: FlatTerm) -> Vec<Instruction> {
     unimplemented!("compile {:#?}", flat)
 }
 
@@ -14,10 +14,9 @@ mod tests {
 
     #[test]
     fn compiles_example_term() {
-        let program = FlatTerm::flatten_term(example_term());
-        let code = compile_program(&program);
-
-        // assert_eq!(code, vec![]);
-        unimplemented!("{:#?}", code)
+        assert_eq!(
+            compile_program(example_term().flatten()),
+            vec![unimplemented!()]
+        );
     }
 }

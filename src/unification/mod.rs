@@ -7,7 +7,7 @@ mod query;
 
 use failure::Error;
 
-use common::{FlatTerm, Functor, Term};
+use common::{Functor, Term};
 
 use self::control::{Control, Instruction};
 pub use self::program::compile_program;
@@ -35,9 +35,9 @@ pub struct Machine {
 impl Machine {
     /// Creates a new Machine, given the term to unify against.
     pub fn new(program: Term) -> Machine {
-        let mut machine = Machine::empty();
-        let program = FlatTerm::flatten_term(program);
-        machine.c.code = compile_program(&program);
+        let /*mut*/ machine = Machine::empty();
+        eprintln!("TODO compile query");
+        // machine.c.code = compile_program(program.flatten());
         machine
     }
 
@@ -81,20 +81,29 @@ impl Machine {
     }
 
     fn set_or_add_register(&mut self, n: usize, val: HeapCell) {
-        if self.e.len() == n {
-            self.e.push(val);
-        } else {
-            self.e[n] = val;
+        while self.e.len() <= n {
+            let i = self.e.len();
+            self.e.push(HeapCell::Ref(i));
         }
+        self.e[n] = val;
     }
 }
 
 impl ::Machine for Machine {
-    fn run_query(&self, query: Vec<Term>) -> Result<(), Error> {
+    fn run_query(&mut self, mut query: Vec<Term>) -> Result<(), Error> {
         if query.len() != 1 {
             bail!("M0 doesn't support conjunctions in queries.");
         }
-        bail!("TODO run_query")
+        let query = query.remove(0);
+
+        self.e.clear();
+        self.s.clear();
+
+        for instr in compile_query(query) {
+            self.run_instruction(instr);
+        }
+
+        bail!("{}", self.s.extract_term(self.e[0], None).unwrap())
     }
 }
 
@@ -106,19 +115,15 @@ mod tests {
 
     fn compile_query_roundtrip(term: Term) -> Term {
         let mut machine = Machine::empty();
-        println!("===== {} =====", term);
-        let flat = FlatTerm::flatten_term(term);
-        for instr in compile_query(&flat, 0) {
-            println!("{}", instr);
+        for instr in compile_query(term) {
             machine.run_instruction(instr);
         }
-        println!("----------");
         machine.s.extract_term(machine.e[0], None).unwrap()
     }
 
     proptest!{
         #[test]
-        fn query_compile_idempotency(ref term in arb_term(5, 10)) {
+        fn compile_query_idempotency(ref term in arb_term(5, 10)) {
             let term2 = compile_query_roundtrip(term.clone());
             let term3 = compile_query_roundtrip(term2.clone());
             assert_eq!(term2, term3);

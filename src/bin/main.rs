@@ -31,9 +31,9 @@ fn main() {
 }
 
 fn run(options: Options) -> Result<(), Error> {
-    let machine = options.machine.new_machine()?;
+    let mut machine = options.machine.new_machine()?;
     if let Some(expr) = options.expr {
-        run_query(&*machine, &expr)
+        run_query(&mut *machine, &expr)
     } else {
         let mut reader = Reader::new(Options::clap().get_name().to_string())?;
         std::env::home_dir()
@@ -61,7 +61,7 @@ fn run(options: Options) -> Result<(), Error> {
             };
 
             // Try running the query.
-            match run_query(&*machine, &query_buf) {
+            match run_query(&mut *machine, &query_buf) {
                 Ok(result) => {
                     query_buf.clear();
                     unimplemented!("{:?}", result)
@@ -82,7 +82,7 @@ fn run(options: Options) -> Result<(), Error> {
     }
 }
 
-fn run_query(m: &Machine, q: &str) -> Result<(), Error> {
+fn run_query(m: &mut Machine, q: &str) -> Result<(), Error> {
     let query = ParseError::from_iresult(parsers::query(q), q)?;
     m.run_query(query)
 }

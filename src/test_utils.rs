@@ -15,10 +15,6 @@ macro_rules! parse_tests {
     }
 }
 
-macro_rules! variable {
-    ($name:expr) => { $crate::common::Variable::from_str($name).unwrap() }
-}
-
 /// Returns the term `p(Z, h(Z, W), f(W))`.
 pub fn example_term() -> Term {
     Term::Structure(

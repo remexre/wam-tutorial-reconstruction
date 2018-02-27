@@ -4,5 +4,4 @@
 #
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
-xs 836928574 4089916504 2592239325 1489947547 # shrinks to ref term = Structure(Atom(Symbol("")), [])
-xs 2917544056 3780096476 1348855538 1664515001 # shrinks to ref term = Anonymous
+xs 4050967788 1718862474 789030292 845924176 # shrinks to ref term = Variable(Variable(Symbol("_0")))
