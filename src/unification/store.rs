@@ -3,25 +3,29 @@ use failure::Error;
 use common::{Functor, Term, Variable};
 
 #[derive(Debug)]
-pub struct State {
+pub struct Store {
     heap: Vec<HeapCell>,
+    pub fail: bool,
     pub mode: Mode,
+    pub s: usize,
 }
 
-impl State {
-    /// Creates a new, empty State.
-    pub fn new() -> State {
-        State {
+impl Store {
+    /// Creates a new, empty Store.
+    pub fn new() -> Store {
+        Store {
+            fail: false,
             mode: Mode::Write,
             heap: Vec::new(),
+            s: 0,
         }
     }
 
-    /// Recursively retrieves a value from a heap cell.
-    pub fn deref(&self, addr: usize) -> HeapCell {
+    /// Returns the address a cell derefs to.
+    pub fn deref(&self, addr: usize) -> usize {
         match self.get(addr) {
             HeapCell::Ref(a) if a != addr => self.deref(a),
-            cell => cell,
+            _ => addr,
         }
     }
 
@@ -29,6 +33,17 @@ impl State {
     /// bounds.
     pub fn get(&self, addr: usize) -> HeapCell {
         self.heap[addr]
+    }
+
+    /// Given the address of a functor cell, returns the functor stored in it.
+    /// Panics if given an address that doesn't point to a functor.
+    pub fn get_functor(&self, addr: usize) -> Functor {
+        match self.get(addr) {
+            HeapCell::Functor(f) => f,
+            cell => {
+                panic!("Expecting {} to be a functor, found {:?}", addr, cell)
+            }
+        }
     }
 
     /// Returns the address that will be returned by the next call to push.
@@ -53,6 +68,19 @@ impl State {
         let n2 = self.push(f(n));
         assert_eq!(n, n2);
         n2
+    }
+
+    /// Binds one term to another. At least one given address must deref to a
+    /// self-referential (unbound) `Ref` cell.
+    pub fn bind(&mut self, a: usize, b: usize) {
+        let da = self.deref(a);
+        let db = self.deref(b);
+        if self.get(da).is_ref() {
+            self.heap[da] = HeapCell::Ref(db);
+        } else {
+            assert!(self.get(db).is_ref());
+            self.heap[db] = HeapCell::Ref(da);
+        }
     }
 
     /// Extracts a Term from the given HeapCell, which may be from a register.
@@ -91,6 +119,15 @@ pub enum HeapCell {
     Functor(Functor),
     Ref(usize),
     Str(usize),
+}
+
+impl HeapCell {
+    pub fn is_ref(self) -> bool {
+        match self {
+            HeapCell::Ref(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

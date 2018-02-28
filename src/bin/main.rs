@@ -33,7 +33,7 @@ fn main() {
 fn run(options: Options) -> Result<(), Error> {
     let mut machine = options.machine.new_machine()?;
     if let Some(expr) = options.expr {
-        run_query(&mut *machine, &expr)
+        run_query(&mut *machine, &expr, || true)
     } else {
         let mut reader = Reader::new(Options::clap().get_name().to_string())?;
         std::env::home_dir()
@@ -61,10 +61,10 @@ fn run(options: Options) -> Result<(), Error> {
             };
 
             // Try running the query.
-            match run_query(&mut *machine, &query_buf) {
-                Ok(result) => {
+            let keep_going = || true;
+            match run_query(&mut *machine, &query_buf, keep_going) {
+                Ok(()) => {
                     query_buf.clear();
-                    unimplemented!("{:?}", result)
                 }
                 Err(err) => match err.downcast::<ParseError>() {
                     Ok(ParseError::Incomplete(_)) => continue,
@@ -82,7 +82,48 @@ fn run(options: Options) -> Result<(), Error> {
     }
 }
 
-fn run_query(m: &mut Machine, q: &str) -> Result<(), Error> {
+fn run_query<F: FnMut() -> bool>(
+    m: &mut Machine,
+    q: &str,
+    mut keep_going: F,
+) -> Result<(), Error> {
     let query = ParseError::from_iresult(parsers::query(q), q)?;
-    m.run_query(query)
+    let mut iter = m.run_query(query);
+
+    let mut written = 0;
+    loop {
+        let bindings = if let Some(r) = iter.next() {
+            let b = r?;
+            if written != 0 {
+                println!(";");
+            }
+            b
+        } else {
+            if written != 0 {
+                println!(".");
+            }
+            break;
+        };
+
+        let mut first = true;
+        for (var, val) in bindings {
+            if first {
+                first = false;
+            } else {
+                print!(",\n");
+            }
+            print!("{} = {}", var, val);
+        }
+        written += 1;
+
+        if !keep_going() {
+            println!(".");
+            break;
+        }
+    }
+
+    if written == 0 {
+        println!("true.");
+    }
+    Ok(())
 }

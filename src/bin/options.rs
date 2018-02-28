@@ -23,10 +23,6 @@ pub struct Options {
 /// A Prolog interpreter to run.
 #[derive(Debug, StructOpt)]
 pub enum MachineOpts {
-    /// A machine for debugging.
-    #[structopt(name = "debug")]
-    Debug,
-
     /// The unification-only machine from chapter 2.
     #[structopt(name = "unification")]
     Unification {
@@ -40,7 +36,6 @@ impl MachineOpts {
     /// Creates a new instance of the specified machine.
     pub fn new_machine(&self) -> Result<Box<Machine>, Error> {
         match *self {
-            MachineOpts::Debug => Ok(Box::new(QueryDebugMachine)),
             MachineOpts::Unification { ref src_file } => {
                 let mut program = read_src_file(src_file)?;
                 if program.len() != 1 {

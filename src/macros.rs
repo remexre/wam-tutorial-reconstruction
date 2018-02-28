@@ -1,3 +1,5 @@
+#![allow(unused_macros)]
+
 macro_rules! atom {
     ($name:ident) => { $crate::common::Atom::from(stringify!($name)) }
 }

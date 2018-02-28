@@ -7,6 +7,8 @@ extern crate failure;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
+extern crate log;
+#[macro_use]
 extern crate nom;
 #[cfg(test)]
 #[macro_use]
@@ -24,30 +26,17 @@ mod test_utils;
 pub mod common;
 pub mod unification;
 
+use std::collections::HashMap;
+
 use failure::Error;
 
-use common::Term;
+use common::{Term, Variable};
 
 /// A trait for an abstract machine based on CESK semantics.
 pub trait Machine {
     /// Runs a query against the program.
-    fn run_query(&mut self, query: Vec<Term>) -> Result<(), Error>;
-}
-
-/// A machine for debugging queries.
-pub struct QueryDebugMachine;
-
-impl Machine for QueryDebugMachine {
-    fn run_query(&mut self, mut query: Vec<Term>) -> Result<(), Error> {
-        use unification::compile_query;
-
-        ensure!(query.len() == 1, "Bad query length");
-        let query = query.remove(0);
-
-        let code = compile_query(query);
-        for instr in code {
-            println!("    {}", instr);
-        }
-        bail!("TODO run_query")
-    }
+    fn run_query(
+        &mut self,
+        query: Vec<Term>,
+    ) -> Box<Iterator<Item = Result<HashMap<Variable, Term>, Error>>>;
 }

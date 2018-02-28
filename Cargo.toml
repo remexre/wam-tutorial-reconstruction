@@ -13,6 +13,7 @@ regex = "0.2.6"
 structopt = "0.2.3"
 symbol = "0.1.1"
 either = "1.4.0"
+log = "0.4.1"
 
 [[bin]]
 name = "wam"
