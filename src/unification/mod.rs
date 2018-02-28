@@ -33,9 +33,6 @@ pub struct Machine {
 
     /// The store, which is the heap (aka the global stack).
     pub s: Store,
-
-    /// The continuation, which doesn't really exist for M0.
-    pub k: (),
 }
 
 impl Machine {
@@ -52,7 +49,6 @@ impl Machine {
             c: Vec::new(),
             e: Env::new(),
             s: Store::new(),
-            k: (),
         }
     }
 
@@ -80,7 +76,6 @@ impl Machine {
                         let n = self.s.push_with(|n| HeapCell::Str(n + 1));
                         self.s.push(HeapCell::Functor(functor));
                         self.s.bind(addr, n);
-                        self.s.s = 0;
                         self.s.mode = Mode::Write;
                     }
                     HeapCell::Str(a) => {
@@ -135,7 +130,7 @@ impl Machine {
                         let f1 = self.s.get_functor(v1);
                         let f2 = self.s.get_functor(v2);
                         if f1 == f2 {
-                            for i in 1..f1.1 {
+                            for i in 1..(f1.1 + 1) {
                                 pdl.push(v1 + i);
                                 pdl.push(v2 + i);
                             }
@@ -169,7 +164,6 @@ impl ::Machine for Machine {
 
         for instr in query_code.into_iter().chain(self.c.clone()) {
             trace!("> {}", instr);
-            println!("> {}", instr);
             self.run_instruction(instr);
             if self.s.fail {
                 let err = format_err!("Failed to unify ({}).", instr);
