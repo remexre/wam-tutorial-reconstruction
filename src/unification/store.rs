@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use failure::Error;
 
 use common::{Functor, Term, Variable};
@@ -70,6 +72,13 @@ impl Store {
         n2
     }
 
+    /// Resets the heap to its initial state, without ceding its allocation.
+    pub fn reset(&mut self) {
+        self.fail = false;
+        self.heap.clear();
+        self.s = 0;
+    }
+
     /// Binds one term to another. At least one given address must deref to a
     /// self-referential (unbound) `Ref` cell.
     pub fn bind(&mut self, a: usize, b: usize) {
@@ -86,16 +95,24 @@ impl Store {
     /// Extracts a Term from the given HeapCell, which may be from a register.
     /// If it is not, the heap index of the cell should be passed in as the
     /// last argument.
-    pub fn extract_term(&self, idx: usize) -> Result<Term, Error> {
+    pub fn extract_term(
+        &self,
+        idx: usize,
+        names: Option<&HashMap<usize, Variable>>,
+    ) -> Result<Term, Error> {
         match self.heap[idx] {
             HeapCell::Functor(f) => {
                 bail!("Found functor data {} where a term was expected", f)
             }
             HeapCell::Ref(n) => if idx == n {
-                let var = Variable::from_str(format!("_{}", n)).unwrap();
+                let var = names
+                    .and_then(|names| names.get(&n).map(|v| v.clone()))
+                    .unwrap_or_else(|| {
+                        Variable::from_str(format!("_{}", n)).unwrap()
+                    });
                 Ok(Term::Variable(var))
             } else {
-                self.extract_term(n)
+                self.extract_term(n, names)
             },
             HeapCell::Str(f_idx) => {
                 let Functor(atom, arity) = match self.heap[f_idx] {
@@ -106,7 +123,7 @@ impl Store {
                 };
                 let mut subterms = vec![];
                 for i in 0..arity {
-                    subterms.push(self.extract_term(f_idx + i + 1)?);
+                    subterms.push(self.extract_term(f_idx + i + 1, names)?);
                 }
                 Ok(Term::Structure(atom, subterms))
             }

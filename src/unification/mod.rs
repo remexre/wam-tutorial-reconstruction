@@ -88,7 +88,7 @@ impl Machine {
                             self.s.s = a + 1;
                             self.s.mode = Mode::Read;
                         } else {
-                            self.s.s = 1;
+                            self.s.s = 0;
                             self.s.fail = true;
                         }
                     }
@@ -163,9 +163,10 @@ impl ::Machine for Machine {
         let query = query.remove(0);
 
         self.e.clear();
-        self.s.fail = false;
+        self.s.reset();
 
         let (query_code, vars) = compile_query(query);
+
         for instr in query_code.into_iter().chain(self.c.clone()) {
             trace!("> {}", instr);
             println!("> {}", instr);
@@ -176,10 +177,14 @@ impl ::Machine for Machine {
             }
         }
 
+        let mut names = HashMap::new();
         Box::new(once(
             vars.into_iter()
                 .map(|(var, reg)| {
-                    self.s.extract_term(self.e[reg]).map(|val| (var, val))
+                    self.s.extract_term(self.e[reg], Some(&names)).map(|val| {
+                        names.insert(self.s.deref(self.e[reg]), var);
+                        (var, val)
+                    })
                 })
                 .collect(),
         ))
@@ -199,7 +204,7 @@ mod tests {
             machine.run_instruction(instr);
             assert!(!machine.s.fail);
         }
-        machine.s.extract_term(machine.e[0]).unwrap()
+        machine.s.extract_term(machine.e[0], None).unwrap()
     }
 
     proptest!{
