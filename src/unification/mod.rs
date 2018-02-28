@@ -20,6 +20,8 @@ pub use self::query::compile_query;
 use self::store::{HeapCell, Mode, Store};
 
 /// An abstract machine for M0.
+///
+/// TODO: This shouldn't really be CESK. More like CS, with both inlined.
 #[derive(Debug)]
 pub struct Machine {
     /// The control component, which contains all loaded code.
@@ -32,8 +34,7 @@ pub struct Machine {
     /// The store, which is the heap (aka the global stack).
     pub s: Store,
 
-    /// The continuation, which is the (local) stack.
-    /// TODO: Define k.
+    /// The continuation, which doesn't really exist for M0.
     pub k: (),
 }
 
@@ -51,7 +52,7 @@ impl Machine {
             c: Vec::new(),
             e: Env::new(),
             s: Store::new(),
-            k: (), // TODO
+            k: (),
         }
     }
 
@@ -79,7 +80,7 @@ impl Machine {
                         let n = self.s.push_with(|n| HeapCell::Str(n + 1));
                         self.s.push(HeapCell::Functor(functor));
                         self.s.bind(addr, n);
-                        self.s.s = 1;
+                        self.s.s = 0;
                         self.s.mode = Mode::Write;
                     }
                     HeapCell::Str(a) => {
@@ -164,7 +165,8 @@ impl ::Machine for Machine {
         self.e.clear();
         self.s.fail = false;
 
-        for instr in compile_query(query).into_iter().chain(self.c.clone()) {
+        let (query_code, vars) = compile_query(query);
+        for instr in query_code.into_iter().chain(self.c.clone()) {
             trace!("> {}", instr);
             println!("> {}", instr);
             self.run_instruction(instr);
@@ -174,11 +176,13 @@ impl ::Machine for Machine {
             }
         }
 
-        Box::new(once(self.s.extract_term(self.e[0]).map(|val| {
-            let mut bindings = HashMap::new();
-            bindings.insert(variable!("TodoDoThisRight"), val);
-            bindings
-        })))
+        Box::new(once(
+            vars.into_iter()
+                .map(|(var, reg)| {
+                    self.s.extract_term(self.e[reg]).map(|val| (var, val))
+                })
+                .collect(),
+        ))
     }
 }
 
@@ -191,7 +195,7 @@ mod tests {
 
     fn compile_query_roundtrip(term: Term) -> Term {
         let mut machine = Machine::empty();
-        for instr in compile_query(term) {
+        for instr in compile_query(term).0 {
             machine.run_instruction(instr);
             assert!(!machine.s.fail);
         }
@@ -213,6 +217,32 @@ mod tests {
             .run_query(vec![example_query_term()])
             .collect::<Result<Vec<_>, _>>()
             .expect("Failed to run query");
-        assert_eq!(res, vec![]);
+        assert_eq!(
+            res,
+            vec![
+                vec![
+                    (
+                        variable!("W"),
+                        Term::Structure(
+                            atom!(f),
+                            vec![Term::Structure(atom!(a), vec![])],
+                        ),
+                    ),
+                    (
+                        variable!("Z"),
+                        Term::Structure(
+                            atom!(f),
+                            vec![
+                                Term::Structure(
+                                    atom!(f),
+                                    vec![Term::Structure(atom!(a), vec![])],
+                                ),
+                            ],
+                        ),
+                    ),
+                ].into_iter()
+                    .collect(),
+            ]
+        );
     }
 }

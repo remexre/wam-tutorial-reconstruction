@@ -12,26 +12,30 @@ fn flatten_term_onto<'t>(
 ) {
     match *term {
         Term::Anonymous => {
-            regs[i] = FlatTermValue::Variable;
+            regs[i] = FlatTermValue::Variable(None);
         }
         Term::Structure(f, ref ts) => {
             let mut is = Vec::new();
             let mut subterms = Vec::new();
             for t in ts.iter() {
-                if let Term::Variable(v) = *t {
-                    is.push(if let Some(&n) = env.get(v) {
-                        n
-                    } else {
+                match *t {
+                    Term::Variable(var) => {
+                        is.push(if let Some(&n) = env.get(var) {
+                            n
+                        } else {
+                            let n = regs.len();
+                            regs.push(FlatTermValue::Variable(Some(var)));
+                            env.push(var, n);
+                            n
+                        });
+                    }
+                    _ => {
                         let n = regs.len();
-                        regs.push(FlatTermValue::Variable);
-                        env.push(v, n);
-                        n
-                    });
-                } else {
-                    let n = regs.len();
-                    regs.push(FlatTermValue::Variable);
-                    subterms.push((n, t));
-                    is.push(n);
+                        // Push a placeholder.
+                        regs.push(FlatTermValue::Variable(None));
+                        subterms.push((n, t));
+                        is.push(n);
+                    }
                 }
             }
             regs[i] = FlatTermValue::Structure(f, is);
@@ -39,8 +43,8 @@ fn flatten_term_onto<'t>(
                 flatten_term_onto(regs, env, i, t);
             }
         }
-        Term::Variable(_) => {
-            regs[i] = FlatTermValue::Variable;
+        Term::Variable(var) => {
+            regs[i] = FlatTermValue::Variable(Some(var));
         }
     }
 }
@@ -48,7 +52,7 @@ fn flatten_term_onto<'t>(
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum FlatTermValue {
     Structure(Atom, Vec<usize>),
-    Variable,
+    Variable(Option<Variable>),
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -57,7 +61,8 @@ pub struct FlatTerm(pub Vec<FlatTermValue>);
 impl Term {
     /// Converts a Term into a flattened form.
     pub fn flatten(&self) -> FlatTerm {
-        let mut regs = vec![FlatTermValue::Variable];
+        // We start with a placeholder.
+        let mut regs = vec![FlatTermValue::Variable(None)];
         let mut env = Env::new();
         flatten_term_onto(&mut regs, &mut env, 0, self);
         FlatTerm(regs)
@@ -71,15 +76,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn flattens_example_term() {
+    fn flattens_example_query() {
         assert_eq!(
             example_query_term().flatten(),
             FlatTerm(vec![
                 FlatTermValue::Structure(atom!(p), vec![1, 2, 3]),
-                FlatTermValue::Variable,
+                FlatTermValue::Variable(Some(variable!("Z"))),
                 FlatTermValue::Structure(atom!(h), vec![1, 4]),
                 FlatTermValue::Structure(atom!(f), vec![4]),
-                FlatTermValue::Variable,
+                FlatTermValue::Variable(Some(variable!("W"))),
             ])
         );
     }
@@ -88,12 +93,12 @@ mod tests {
     fn flattens_simple_things() {
         assert_eq!(
             Term::Anonymous.flatten(),
-            FlatTerm(vec![FlatTermValue::Variable])
+            FlatTerm(vec![FlatTermValue::Variable(None)])
         );
 
         assert_eq!(
             Term::Variable(variable!("X")).flatten(),
-            FlatTerm(vec![FlatTermValue::Variable])
+            FlatTerm(vec![FlatTermValue::Variable(Some(variable!("X")))])
         );
 
         assert_eq!(
@@ -106,7 +111,7 @@ mod tests {
             ).flatten(),
             FlatTerm(vec![
                 FlatTermValue::Structure(atom!(foo), vec![1, 1]),
-                FlatTermValue::Variable,
+                FlatTermValue::Variable(Some(variable!("X"))),
             ])
         );
     }

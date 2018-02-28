@@ -61,7 +61,13 @@ fn run(options: Options) -> Result<(), Error> {
             };
 
             // Try running the query.
-            let keep_going = || true;
+            let keep_going = || {
+                reader.set_prompt(" ");
+
+                // TODO: Read one char ({';', ' ', '\n', '\t'} or {'.'}) from
+                // reader. https://github.com/murarth/linefeed/issues/27
+                true
+            };
             match run_query(&mut *machine, &query_buf, keep_going) {
                 Ok(()) => {
                     query_buf.clear();

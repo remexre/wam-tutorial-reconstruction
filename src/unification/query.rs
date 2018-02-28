@@ -1,6 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use common::{FlatTermValue, Functor, Term};
+use common::{FlatTermValue, Functor, Term, Variable};
 
 use super::control::Instruction;
 
@@ -25,30 +25,41 @@ fn compile_visitor(
     code: &mut Vec<Instruction>,
     seen: &mut HashSet<usize>,
     flats: &mut Vec<Option<FlatTermValue>>,
+    vars: &mut HashMap<Variable, usize>,
     current: usize,
 ) {
     if let Some(val) = flats[current].take() {
-        if let FlatTermValue::Structure(a, ref args) = val {
-            for &arg in args {
-                compile_visitor(code, seen, flats, arg);
+        match val {
+            FlatTermValue::Structure(a, ref args) => {
+                for &arg in args {
+                    compile_visitor(code, seen, flats, vars, arg);
+                }
+                code.push(compile(seen, current, Some(Functor(a, args.len()))));
+                for &arg in args {
+                    code.push(compile(seen, arg, None));
+                }
             }
-            code.push(compile(seen, current, Some(Functor(a, args.len()))));
-            for &arg in args {
-                code.push(compile(seen, arg, None));
+            FlatTermValue::Variable(Some(var)) => {
+                let overwrote = vars.insert(var, current);
+                assert!(overwrote.is_none());
             }
+            FlatTermValue::Variable(None) => {}
         }
     }
 }
 
 /// Compiles a term into instructions that will construct the term on the
 /// heap, storing the root into the given register number.
-pub fn compile_query(term: Term) -> Vec<Instruction> {
+pub fn compile_query(
+    term: Term,
+) -> (Vec<Instruction>, HashMap<Variable, usize>) {
     let mut flat = term.flatten().0.into_iter().map(Some).collect::<Vec<_>>();
     let mut seen = HashSet::with_capacity(flat.len());
     let mut code = Vec::new();
+    let mut vars = HashMap::new();
 
     for i in 0..flat.len() {
-        compile_visitor(&mut code, &mut seen, &mut flat, i);
+        compile_visitor(&mut code, &mut seen, &mut flat, &mut vars, i);
     }
     assert!(flat.iter().all(Option::is_none));
 
@@ -59,10 +70,10 @@ pub fn compile_query(term: Term) -> Vec<Instruction> {
             Term::Anonymous | Term::Variable(_) => true,
             _ => false,
         });
-        vec![Instruction::SetVariable(0)]
-    } else {
-        code
+        code = vec![Instruction::SetVariable(0)];
     }
+
+    (code, vars)
 }
 
 #[cfg(test)]
@@ -74,17 +85,22 @@ mod tests {
     fn compiles_example_term() {
         assert_eq!(
             compile_query(example_query_term()),
-            vec![
-                Instruction::PutStructure(functor!(h / 2), 2),
-                Instruction::SetVariable(1),
-                Instruction::SetVariable(4),
-                Instruction::PutStructure(functor!(f / 1), 3),
-                Instruction::SetValue(4),
-                Instruction::PutStructure(functor!(p / 3), 0),
-                Instruction::SetValue(1),
-                Instruction::SetValue(2),
-                Instruction::SetValue(3),
-            ]
+            (
+                vec![
+                    Instruction::PutStructure(functor!(h / 2), 2),
+                    Instruction::SetVariable(1),
+                    Instruction::SetVariable(4),
+                    Instruction::PutStructure(functor!(f / 1), 3),
+                    Instruction::SetValue(4),
+                    Instruction::PutStructure(functor!(p / 3), 0),
+                    Instruction::SetValue(1),
+                    Instruction::SetValue(2),
+                    Instruction::SetValue(3),
+                ],
+                vec![(variable!("Z"), 1), (variable!("W"), 4)]
+                    .into_iter()
+                    .collect()
+            )
         );
     }
 }
