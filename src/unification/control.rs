@@ -5,12 +5,32 @@ use common::Functor;
 /// A single machine instruction.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Instruction {
+    /// Places the functor part of a structure onto the heap, storing its
+    /// address in the register numbered by the second argument.
     PutStructure(Functor, usize),
+
+    /// Places an unbound variable cell onto the heap, storing its address in
+    /// the register numbered by the argument.
     SetVariable(usize),
+
+    /// Places an reference to the value referenced by the register numbered by
+    /// the argument onto the heap.
     SetValue(usize),
 
+    /// Inspects the value pointed to by the numbered register in preparation
+    /// for unification with a functor.
+    ///
+    /// If the cell points to the same functor, unification proceeds with the
+    /// machine in read mode, which unifies with each argument.
+    ///
+    /// If the cell points to an unbound reference, unification proceeds with
+    /// the machine in write mode, which constructs the term on the heap.
     GetStructure(Functor, usize),
+
+    /// Attempts to unify a variable.
     UnifyVariable(usize),
+
+    /// Attempts to unify a value. See `Machine::unify`.
     UnifyValue(usize),
 }
 

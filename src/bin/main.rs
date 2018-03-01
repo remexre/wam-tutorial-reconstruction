@@ -1,16 +1,20 @@
 //! A REPL and interpreter for the various machines in "Warren's Abstract
 //! Machine: A Tutorial Reconstruction."
 
+extern crate ansi_term;
 #[macro_use]
 extern crate failure;
 extern crate linefeed;
+extern crate log;
 extern crate nom;
 #[macro_use]
 extern crate structopt;
 extern crate wam_tutorial_reconstruction;
 
+mod logger;
 mod options;
 
+use ansi_term::{Color, Style};
 use failure::Error;
 use linefeed::{ReadResult, Reader};
 use structopt::StructOpt;
@@ -31,22 +35,27 @@ fn main() {
 }
 
 fn run(options: Options) -> Result<(), Error> {
+    let verbosity = options.verbosity();
     let mut machine = options.machine.new_machine()?;
-    if let Some(expr) = options.expr {
+    let expr = options.expr;
+
+    let mut reader = Reader::new(Options::clap().get_name().to_string())?;
+    reader.set_blink_matching_paren(true);
+    std::env::home_dir()
+        .and_then(|home| {
+            let inputrc = home.join(".inputrc");
+            if inputrc.exists() {
+                linefeed::inputrc::parse_file(&inputrc)
+            } else {
+                None
+            }
+        })
+        .map(|ds| reader.evaluate_directives(ds));
+    assert!(logger::init(&mut reader, verbosity));
+
+    if let Some(expr) = expr {
         run_query(&mut *machine, &expr, || true)
     } else {
-        let mut reader = Reader::new(Options::clap().get_name().to_string())?;
-        std::env::home_dir()
-            .and_then(|home| {
-                let inputrc = home.join(".inputrc");
-                if inputrc.exists() {
-                    linefeed::inputrc::parse_file(&inputrc)
-                } else {
-                    None
-                }
-            })
-            .map(|ds| reader.evaluate_directives(ds));
-
         let mut query_buf = String::new();
         loop {
             // Read a line of input.
@@ -96,16 +105,16 @@ fn run_query<F: FnMut() -> bool>(
     let query = ParseError::from_iresult(parsers::query(q), q)?;
     let mut iter = m.run_query(query);
 
-    let mut written = 0;
+    let mut first_binding_set = true;
     loop {
         let bindings = if let Some(r) = iter.next() {
             let b = r?;
-            if written != 0 {
+            if !first_binding_set {
                 println!(";");
             }
             b
         } else {
-            if written != 0 {
+            if !first_binding_set {
                 println!(".");
             }
             break;
@@ -116,11 +125,14 @@ fn run_query<F: FnMut() -> bool>(
             if first {
                 first = false;
             } else {
-                print!(",\n");
+                println!(",");
             }
             print!("{} = {}", var, val);
         }
-        written += 1;
+        if first {
+            print!("true");
+        }
+        first_binding_set = false;
 
         if !keep_going() {
             println!(".");
@@ -128,8 +140,8 @@ fn run_query<F: FnMut() -> bool>(
         }
     }
 
-    if written == 0 {
-        println!("true.");
+    if first_binding_set {
+        println!("{}", Style::new().bold().fg(Color::Red).paint("false."));
     }
     Ok(())
 }

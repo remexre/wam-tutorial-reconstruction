@@ -49,12 +49,17 @@ fn flatten_term_onto<'t>(
     }
 }
 
+/// A value in a flattened term.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum FlatTermValue {
+    /// A structure.
     Structure(Atom, Vec<usize>),
+
+    /// A variable, possibly with a name.
     Variable(Option<Variable>),
 }
 
+/// A flattened term.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FlatTerm(pub Vec<FlatTermValue>);
 

@@ -4,11 +4,19 @@ use failure::Error;
 
 use common::{Functor, Term, Variable};
 
+/// The heap, as well as some "small" data that are not in the numbered
+/// registers.
 #[derive(Debug)]
 pub struct Store {
     heap: Vec<HeapCell>,
+
+    /// Whether unification has failed.
     pub fail: bool,
+
+    /// The mode the unification instructions operate in.
     pub mode: Mode,
+
+    /// The location at which unification is occurring.
     pub s: usize,
 }
 
@@ -131,15 +139,21 @@ impl Store {
     }
 }
 
+/// A single cell on the heap.
 #[derive(Copy, Clone, Debug)]
 pub enum HeapCell {
+    /// A functor.
     Functor(Functor),
+
+    /// A reference to another cell.
     Ref(usize),
+
+    /// A structure reference, which points to a functor cell.
     Str(usize),
 }
 
 impl HeapCell {
-    pub fn is_ref(self) -> bool {
+    fn is_ref(self) -> bool {
         match self {
             HeapCell::Ref(_) => true,
             _ => false,
@@ -147,8 +161,12 @@ impl HeapCell {
     }
 }
 
+/// The mode the interpreter is in, for the unify instructions.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Mode {
+    /// Read mode, in which unification with existing values is attempted.
     Read,
+
+    /// Write mode, in which an exemplar of the value is built.
     Write,
 }

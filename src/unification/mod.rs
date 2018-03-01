@@ -1,25 +1,25 @@
-//! Chapter 2 -- Unification, Pure and Simple.
+//! M<sub>0</sub>, from Chapter 2 -- Unification, Pure and Simple.
 
-pub mod control;
-pub mod env;
-pub mod store;
+mod control;
+mod env;
+mod store;
 mod program;
 mod query;
 
 use std::collections::HashMap;
-use std::iter::once;
+use std::iter::{empty, once};
 
 use failure::Error;
 
 use common::{Term, Variable};
 
-use self::control::Instruction;
-use self::env::Env;
+pub use self::control::Instruction;
+pub use self::env::Env;
 pub use self::program::compile_program;
 pub use self::query::compile_query;
-use self::store::{HeapCell, Mode, Store};
+pub use self::store::{HeapCell, Mode, Store};
 
-/// An abstract machine for M0.
+/// An abstract machine for M<sub>0</sub>.
 ///
 /// TODO: This shouldn't really be CESK. More like CS, with both inlined.
 #[derive(Debug)]
@@ -119,6 +119,10 @@ impl Machine {
     }
 
     /// Unifies the values at the two addresses.
+    ///
+    /// This operates as a breadth-first-search, checking (and recursively
+    /// searching) through any functors that unify, and simply `bind`ing any
+    /// variables.
     fn unify(&mut self, a1: usize, a2: usize) {
         let mut pdl = vec![a1, a2];
         while !pdl.is_empty() && !self.s.fail {
@@ -136,6 +140,7 @@ impl Machine {
                             }
                         } else {
                             self.s.fail = true;
+                            return;
                         }
                     }
                     _ => self.s.bind(d1, d2),
@@ -163,11 +168,10 @@ impl ::Machine for Machine {
         let (query_code, vars) = compile_query(query);
 
         for instr in query_code.into_iter().chain(self.c.clone()) {
-            trace!("> {}", instr);
+            trace!("{}", instr);
             self.run_instruction(instr);
             if self.s.fail {
-                let err = format_err!("Failed to unify ({}).", instr);
-                return Box::new(once(Err(err)));
+                return Box::new(empty());
             }
         }
 

@@ -3,6 +3,7 @@
 //! Currently does not support:
 //!
 //!  - Infix operators
+#![allow(missing_docs)]
 
 use std::char;
 use std::str::FromStr;
@@ -51,6 +52,7 @@ macro_rules! remove_whitespace_and_comments {
 
 // The "basic" common types.
 
+/// Parses an `Atom`.
 named!(pub atom(&str) -> Atom, remove_whitespace_and_comments!(alt!(
     map!(
         delimited!(tag_s!("'"), many0!(atom_quoted_char), tag_s!("'")),
@@ -59,12 +61,14 @@ named!(pub atom(&str) -> Atom, remove_whitespace_and_comments!(alt!(
     map!(unquoted_atom, |cs| cs.into())
 )));
 
+/// Parses a `Clause`.
 named!(pub clause(&str) -> Clause, remove_whitespace_and_comments!(do_parse!(
     clause: alt!(clause_rule | clause_fact) >>
     tag_s!(".") >>
     ( clause )
 )));
 
+/// Parses a `Functor`.
 named!(pub functor(&str) -> Functor, remove_whitespace_and_comments!(do_parse!(
     atom: atom >>
     tag_s!("/") >>
@@ -72,15 +76,18 @@ named!(pub functor(&str) -> Functor, remove_whitespace_and_comments!(do_parse!(
     ( Functor(atom, arity) )
 )));
 
+/// Parses a series of `Clause`s.
 named!(pub program(&str) -> Vec<Clause>,
     remove_whitespace_and_comments!(many0!(clause)));
 
+/// Parses a query, which is a conjunctive list of `Term`s.
 named!(pub query(&str) -> Vec<Term>, remove_whitespace_and_comments!(do_parse!(
     terms: separated_list!(tag_s!(","), term) >>
     tag_s!(".") >>
     ( terms )
 )));
 
+/// Parses a `Term`.
 named!(pub term(&str) -> Term, remove_whitespace_and_comments!(alt!(
     map!(variable, |s| if s == "_" {
         Term::Anonymous
@@ -89,6 +96,7 @@ named!(pub term(&str) -> Term, remove_whitespace_and_comments!(alt!(
     }) | term_structure
 )));
 
+/// Parses a valid `Variable`.
 named!(pub variable(&str) -> &str, remove_whitespace_and_comments!(recognize!(tuple!(
     take_while1_s!(is_variable_start_char),
     take_while_s!(is_plain_char)

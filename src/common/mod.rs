@@ -19,7 +19,10 @@ pub use self::flatten::{FlatTerm, FlatTermValue};
 /// An error while parsing.
 #[derive(Clone, Debug, Fail, PartialEq)]
 pub enum ParseError {
+    /// An error, possibly with the byte index at which it occurred.
     Error(Option<usize>),
+
+    /// An error which can be resolved by adding more input.
     Incomplete(Needed),
 }
 
@@ -84,6 +87,7 @@ impl Display for ParseError {
     }
 }
 
+/// An interned string literal, used for literals.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Atom(pub Symbol);
 
@@ -157,6 +161,7 @@ impl From<String> for Atom {
     }
 }
 
+/// A functor, which contains the atom and arity of a structure.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Functor(pub Atom, pub usize);
 
@@ -166,6 +171,9 @@ impl Display for Functor {
     }
 }
 
+/// A variable.
+///
+/// The name is not public, since it may only be certain values.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Variable(Symbol);
 
@@ -200,10 +208,18 @@ impl Display for Variable {
     }
 }
 
+/// Any value, which may have unresolved variables within it.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Term {
+    /// An anonymous variable. Unification with an anonymous variable will not
+    /// affect other anonymous variables in the term.
     Anonymous,
+
+    /// A structure literal.
     Structure(Atom, Vec<Term>),
+
+    /// A variable. All instances of a variable within a term will be
+    /// instantiated to the same value.
     Variable(Variable),
 }
 
@@ -255,6 +271,11 @@ impl Display for Term {
     }
 }
 
+/// A clause, which is a fact or a rule.
+///
+/// Facts are always true, and have an empty Vec as their second value.
+///
+/// Rules are true if all of the terms in their second value are true.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Clause(pub Term, pub Vec<Term>);
 

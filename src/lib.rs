@@ -1,5 +1,6 @@
 //! A Rust implementation of the machines in "Warren's Abstract Machine: A
 //! Tutorial Reconstruction."
+#![warn(missing_docs)]
 
 extern crate either;
 #[macro_use]
