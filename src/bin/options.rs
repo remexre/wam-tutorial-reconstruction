@@ -57,6 +57,14 @@ pub enum MachineOpts {
         #[structopt(name = "FILE", parse(from_os_str))]
         src_file: PathBuf,
     },
+
+    /// The fact-unifying machine from chapter 2.
+    #[structopt(name = "facts")]
+    Facts {
+        /// The file to read. Should contain a single term.
+        #[structopt(name = "FILE", parse(from_os_str))]
+        src_file: PathBuf,
+    },
 }
 
 impl MachineOpts {
@@ -66,13 +74,26 @@ impl MachineOpts {
             MachineOpts::Unification { ref src_file } => {
                 let mut program = read_src_file(src_file)?;
                 if program.len() != 1 {
-                    bail!("M0 doesn't support more than one clause in the program.");
+                    bail!("M0 only supports one clause in the program.");
                 }
                 let Clause(head, body) = program.remove(0);
                 if !body.is_empty() {
                     bail!("M0 doesn't support implications.");
                 }
-                Ok(Box::new(unification::Machine::new(head)))
+                Ok(Box::new(unification::Machine::new(Term::Structure(head))))
+            }
+            MachineOpts::Facts { ref src_file } => {
+                let mut program = read_src_file(src_file)?;
+                let facts = program
+                    .into_iter()
+                    .map(|Clause(head, body)| {
+                        if !body.is_empty() {
+                            bail!("M1 doesn't support implications.");
+                        }
+                        Ok(head)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(Box::new(facts::Machine::new(facts)))
             }
         }
     }

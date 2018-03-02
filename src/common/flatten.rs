@@ -1,4 +1,4 @@
-use super::{Atom, Env, Term, Variable};
+use super::{Atom, Env, Structure, Term, Variable};
 
 /// A breadth-first search to flatten a term.
 ///
@@ -14,7 +14,7 @@ fn flatten_term_onto<'t>(
         Term::Anonymous => {
             regs[i] = FlatTermValue::Variable(None);
         }
-        Term::Structure(f, ref ts) => {
+        Term::Structure(Structure(f, ref ts)) => {
             let mut is = Vec::new();
             let mut subterms = Vec::new();
             for t in ts.iter() {
@@ -81,7 +81,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn flattens_example_query() {
+    fn flattens_example_query_term() {
         assert_eq!(
             example_query_term().flatten(),
             FlatTerm(vec![
@@ -107,13 +107,13 @@ mod tests {
         );
 
         assert_eq!(
-            Term::Structure(
+            Term::Structure(Structure(
                 "foo".into(),
                 vec![
                     Term::Variable(variable!("X")),
                     Term::Variable(variable!("X")),
                 ]
-            ).flatten(),
+            )).flatten(),
             FlatTerm(vec![
                 FlatTermValue::Structure(atom!(foo), vec![1, 1]),
                 FlatTermValue::Variable(Some(variable!("X"))),

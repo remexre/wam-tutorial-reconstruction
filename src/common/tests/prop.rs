@@ -25,14 +25,14 @@ proptest! {
     }
 
     #[test]
-    fn parse_tostring_for_term(ref term in arb_term(10, 10)) {
+    fn parse_tostring_for_term(ref term in arb_term(10, 4)) {
         let term_str = term.to_string();
         let term2 = Term::parse(&term_str).expect("Failed to parse term");
         assert_eq!(term, &term2);
     }
 
     #[test]
-    fn parse_tostring_for_clause(ref clause in arb_clause(10, 10, 3)) {
+    fn parse_tostring_for_clause(ref clause in arb_clause(5, 3, 3)) {
         let clause_str = clause.to_string();
         let clause2 = Clause::parse(&clause_str)
             .expect("Failed to parse clause");

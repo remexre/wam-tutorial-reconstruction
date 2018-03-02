@@ -11,13 +11,13 @@ use std::iter::{empty, once};
 
 use failure::Error;
 
-use common::{Term, Variable};
+use common::{HeapCell, Structure, Term, Variable};
 
 pub use self::control::Instruction;
 pub use self::env::Env;
 pub use self::program::compile_program;
 pub use self::query::compile_query;
-pub use self::store::{HeapCell, Mode, Store};
+pub use self::store::{Mode, Store};
 
 /// An abstract machine for M<sub>0</sub>.
 ///
@@ -153,14 +153,14 @@ impl Machine {
 impl ::Machine for Machine {
     fn run_query(
         &mut self,
-        mut query: Vec<Term>,
+        mut query: Vec<Structure>,
     ) -> Box<Iterator<Item = Result<HashMap<Variable, Term>, Error>>> {
         if query.len() != 1 {
             let err =
                 format_err!("M0 doesn't support conjunctions in queries.");
             return Box::new(once(Err(err)));
         }
-        let query = query.remove(0);
+        let query = Term::Structure(query.remove(0));
 
         self.e.clear();
         self.s.reset();
@@ -192,7 +192,7 @@ impl ::Machine for Machine {
 #[cfg(test)]
 mod tests {
     use Machine as MachineTrait;
-    use test_utils::{arb_term, example_program_term, example_query_term};
+    use test_utils::{arb_term, example_program_term, example_query};
 
     use super::*;
 
@@ -216,8 +216,9 @@ mod tests {
 
     #[test]
     fn works() {
-        let res = Machine::new(example_program_term())
-            .run_query(vec![example_query_term()])
+        let mut machine = Machine::new(example_program_term());
+        let res = machine
+            .run_query(vec![example_query()])
             .collect::<Result<Vec<_>, _>>()
             .expect("Failed to run query");
         assert_eq!(
@@ -226,22 +227,27 @@ mod tests {
                 vec![
                     (
                         variable!("W"),
-                        Term::Structure(
+                        Term::Structure(Structure(
                             atom!(f),
-                            vec![Term::Structure(atom!(a), vec![])],
-                        ),
+                            vec![Term::Structure(Structure(atom!(a), vec![]))],
+                        )),
                     ),
                     (
                         variable!("Z"),
-                        Term::Structure(
+                        Term::Structure(Structure(
                             atom!(f),
                             vec![
-                                Term::Structure(
+                                Term::Structure(Structure(
                                     atom!(f),
-                                    vec![Term::Structure(atom!(a), vec![])],
-                                ),
+                                    vec![
+                                        Term::Structure(Structure(
+                                            atom!(a),
+                                            vec![],
+                                        )),
+                                    ],
+                                )),
                             ],
-                        ),
+                        )),
                     ),
                 ].into_iter()
                     .collect(),

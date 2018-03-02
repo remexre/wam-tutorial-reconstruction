@@ -25,19 +25,20 @@ mod macros;
 mod test_utils;
 
 pub mod common;
+pub mod facts;
 pub mod unification;
 
 use std::collections::HashMap;
 
 use failure::Error;
 
-use common::{Term, Variable};
+use common::{Structure, Term, Variable};
 
 /// A trait for an abstract machine based on CESK semantics.
 pub trait Machine {
     /// Runs a query against the program.
-    fn run_query(
-        &mut self,
-        query: Vec<Term>,
-    ) -> Box<Iterator<Item = Result<HashMap<Variable, Term>, Error>>>;
+    fn run_query<'a>(
+        &'a mut self,
+        query: Vec<Structure>,
+    ) -> Box<'a + Iterator<Item = Result<HashMap<Variable, Term>, Error>>>;
 }

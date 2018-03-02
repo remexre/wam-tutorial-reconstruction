@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 
-use common::{Atom, Clause, Functor, Term, Variable};
+use common::{Atom, Clause, Functor, Structure, Term, Variable};
 
 macro_rules! parse_tests {
     ($($parser:ident($input:expr, $expected:expr);)*) => {
@@ -16,42 +16,58 @@ macro_rules! parse_tests {
 }
 
 /// Returns the term `p(Z, h(Z, W), f(W))`.
-pub fn example_query_term() -> Term {
-    Term::Structure(
+pub fn example_query() -> Structure {
+    Structure(
         atom!(p),
         vec![
             Term::Variable(variable!("Z")),
-            Term::Structure(
+            Term::Structure(Structure(
                 atom!(h),
                 vec![
                     Term::Variable(variable!("Z")),
                     Term::Variable(variable!("W")),
                 ],
-            ),
-            Term::Structure(atom!(f), vec![Term::Variable(variable!("W"))]),
+            )),
+            Term::Structure(Structure(
+                atom!(f),
+                vec![Term::Variable(variable!("W"))],
+            )),
+        ],
+    )
+}
+
+/// Returns the term `p(Z, h(Z, W), f(W))`.
+pub fn example_query_term() -> Term {
+    Term::Structure(example_query())
+}
+
+/// Returns the term `p(f(X), h(Y, f(a)), Y)`.
+pub fn example_program() -> Structure {
+    Structure(
+        atom!(p),
+        vec![
+            Term::Structure(Structure(
+                atom!(f),
+                vec![Term::Variable(variable!("X"))],
+            )),
+            Term::Structure(Structure(
+                atom!(h),
+                vec![
+                    Term::Variable(variable!("Y")),
+                    Term::Structure(Structure(
+                        atom!(f),
+                        vec![Term::Structure(Structure(atom!(a), vec![]))],
+                    )),
+                ],
+            )),
+            Term::Variable(variable!("Y")),
         ],
     )
 }
 
 /// Returns the term `p(f(X), h(Y, f(a)), Y)`.
 pub fn example_program_term() -> Term {
-    Term::Structure(
-        atom!(p),
-        vec![
-            Term::Structure(atom!(f), vec![Term::Variable(variable!("X"))]),
-            Term::Structure(
-                atom!(h),
-                vec![
-                    Term::Variable(variable!("Y")),
-                    Term::Structure(
-                        atom!(f),
-                        vec![Term::Structure(atom!(a), vec![])],
-                    ),
-                ],
-            ),
-            Term::Variable(variable!("Y")),
-        ],
-    )
+    Term::Structure(example_program())
 }
 
 prop_compose! {
@@ -89,10 +105,25 @@ pub fn arb_term(
         move |inner| {
             arb_atom().prop_flat_map(move |atom| {
                 prop::collection::vec(inner.clone(), 0..max_functor_arity)
-                    .prop_map(move |subterms| Term::Structure(atom, subterms))
+                    .prop_map(move |subterms| {
+                        Term::Structure(Structure(atom, subterms))
+                    })
             })
         },
     )
+        .boxed()
+}
+
+pub fn arb_structure(
+    max_functor_arity: usize,
+    max_depth: usize,
+) -> BoxedStrategy<Structure> {
+    arb_atom()
+        .prop_flat_map(move |name| {
+            let term = arb_term(max_functor_arity, max_depth - 1);
+            prop::collection::vec(term, 0..max_functor_arity)
+                .prop_map(move |ts| Structure(name, ts))
+        })
         .boxed()
 }
 
@@ -101,10 +132,10 @@ pub fn arb_clause(
     max_term_depth: usize,
     max_clause_depth: usize,
 ) -> BoxedStrategy<Clause> {
-    arb_term(max_functor_arity, max_term_depth)
+    arb_structure(max_functor_arity, max_term_depth)
         .prop_flat_map(move |head| {
-            let term = arb_term(max_functor_arity, max_term_depth);
-            prop::collection::vec(term, 0..max_clause_depth)
+            let structure = arb_structure(max_functor_arity, max_term_depth);
+            prop::collection::vec(structure, 0..max_clause_depth)
                 .prop_map(move |tail| Clause(head.clone(), tail))
         })
         .boxed()

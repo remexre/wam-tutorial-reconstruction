@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use failure::Error;
 
-use common::{Functor, Term, Variable};
+use common::{Functor, HeapCell, Structure, Term, Variable};
 
 /// The heap, as well as some "small" data that are not in the numbered
 /// registers.
@@ -133,30 +133,8 @@ impl Store {
                 for i in 0..arity {
                     subterms.push(self.extract_term(f_idx + i + 1, names)?);
                 }
-                Ok(Term::Structure(atom, subterms))
+                Ok(Term::Structure(Structure(atom, subterms)))
             }
-        }
-    }
-}
-
-/// A single cell on the heap.
-#[derive(Copy, Clone, Debug)]
-pub enum HeapCell {
-    /// A functor.
-    Functor(Functor),
-
-    /// A reference to another cell.
-    Ref(usize),
-
-    /// A structure reference, which points to a functor cell.
-    Str(usize),
-}
-
-impl HeapCell {
-    fn is_ref(self) -> bool {
-        match self {
-            HeapCell::Ref(_) => true,
-            _ => false,
         }
     }
 }

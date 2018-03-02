@@ -216,7 +216,7 @@ pub enum Term {
     Anonymous,
 
     /// A structure literal.
-    Structure(Atom, Vec<Term>),
+    Structure(Structure),
 
     /// A variable. All instances of a variable within a term will be
     /// instantiated to the same value.
@@ -234,11 +234,11 @@ impl Term {
         }
         match *self {
             Term::Anonymous => false,
-            Term::Structure(_, ref ts) => ts.iter().any(|t| t.contains(sub)),
+            Term::Structure(ref s) => s.1.iter().any(|t| t.contains(sub)),
             Term::Variable(ref v) => match *sub {
                 Term::Anonymous => false,
                 Term::Variable(ref v2) => v == v2,
-                Term::Structure(_, _) => false,
+                Term::Structure(_) => false,
             },
         }
     }
@@ -248,25 +248,40 @@ impl Display for Term {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
         match *self {
             Term::Anonymous => fmt.write_char('_'),
-            Term::Structure(ref atom, ref args) => {
-                Display::fmt(atom, fmt)?;
-                if args.is_empty() {
-                    Ok(())
-                } else {
-                    fmt.write_char('(')?;
-                    let mut first = true;
-                    for arg in args {
-                        if first {
-                            first = false;
-                        } else {
-                            fmt.write_str(", ")?;
-                        }
-                        Display::fmt(arg, fmt)?;
-                    }
-                    fmt.write_char(')')
-                }
-            }
+            Term::Structure(ref s) => Display::fmt(s, fmt),
             Term::Variable(ref v) => Display::fmt(v, fmt),
+        }
+    }
+}
+
+/// A structure, which has a functor and a sequence of terms.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Structure(pub Atom, pub Vec<Term>);
+
+impl Structure {
+    /// Returns the functor for this structure.
+    pub fn functor(&self) -> Functor {
+        Functor(self.0, self.1.len())
+    }
+}
+
+impl Display for Structure {
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        Display::fmt(&self.0, fmt)?;
+        if self.1.is_empty() {
+            Ok(())
+        } else {
+            fmt.write_char('(')?;
+            let mut first = true;
+            for arg in &self.1 {
+                if first {
+                    first = false;
+                } else {
+                    fmt.write_str(", ")?;
+                }
+                Display::fmt(arg, fmt)?;
+            }
+            fmt.write_char(')')
         }
     }
 }
@@ -277,7 +292,7 @@ impl Display for Term {
 ///
 /// Rules are true if all of the terms in their second value are true.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Clause(pub Term, pub Vec<Term>);
+pub struct Clause(pub Structure, pub Vec<Structure>);
 
 impl Display for Clause {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
@@ -296,5 +311,28 @@ impl Display for Clause {
             }
         }
         fmt.write_char('.')
+    }
+}
+
+/// A single cell on the heap.
+#[derive(Copy, Clone, Debug)]
+pub enum HeapCell {
+    /// A functor.
+    Functor(Functor),
+
+    /// A reference to another cell.
+    Ref(usize),
+
+    /// A structure reference, which points to a functor cell.
+    Str(usize),
+}
+
+impl HeapCell {
+    /// Returns whether the given cell is a Ref.
+    pub fn is_ref(self) -> bool {
+        match self {
+            HeapCell::Ref(_) => true,
+            _ => false,
+        }
     }
 }

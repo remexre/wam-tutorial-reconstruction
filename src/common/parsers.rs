@@ -3,14 +3,13 @@
 //! Currently does not support:
 //!
 //!  - Infix operators
-#![allow(missing_docs)]
 
 use std::char;
 use std::str::FromStr;
 
 use nom::{digit, hex_digit, multispace, IResult, Needed};
 
-use common::{Atom, Clause, Functor, Term, Variable};
+use common::{Atom, Clause, Functor, Structure, Term, Variable};
 
 macro_rules! from_str {
     ($($(#[$meta:meta])* $parser:ident => $ty:ty),*$(,)*) => {
@@ -37,8 +36,9 @@ from_str! {
     term => Term,
 }
 
-/// Matches whitespace or a line comment.
-named!(whitespace_or_comment(&str) -> &str, recognize!(many0!(alt!(
+named_attr!(
+    #[doc = "Matches whitespace or a line comment."],
+    whitespace_or_comment(&str) -> &str, recognize!(many0!(alt!(
     value!((), one_of!(" \n\r\t")) |
     value!((), tuple!(tag_s!("%"), take_till_s!(|ch| ch == '\r' || ch == '\n')))
 ))));
@@ -52,8 +52,9 @@ macro_rules! remove_whitespace_and_comments {
 
 // The "basic" common types.
 
-/// Parses an `Atom`.
-named!(pub atom(&str) -> Atom, remove_whitespace_and_comments!(alt!(
+named_attr!(
+    #[doc = "Parses an `Atom`."],
+    pub atom(&str) -> Atom, remove_whitespace_and_comments!(alt!(
     map!(
         delimited!(tag_s!("'"), many0!(atom_quoted_char), tag_s!("'")),
         |cs| Atom::from(cs.into_iter().filter_map(|x| x).collect::<String>())
@@ -61,43 +62,60 @@ named!(pub atom(&str) -> Atom, remove_whitespace_and_comments!(alt!(
     map!(unquoted_atom, |cs| cs.into())
 )));
 
-/// Parses a `Clause`.
-named!(pub clause(&str) -> Clause, remove_whitespace_and_comments!(do_parse!(
+named_attr!(
+    #[doc = "Parses a `Clause`."],
+    pub clause(&str) -> Clause, remove_whitespace_and_comments!(do_parse!(
     clause: alt!(clause_rule | clause_fact) >>
     tag_s!(".") >>
     ( clause )
 )));
 
-/// Parses a `Functor`.
-named!(pub functor(&str) -> Functor, remove_whitespace_and_comments!(do_parse!(
+named_attr!(
+    #[doc = "Parses a `Functor`."],
+    pub functor(&str) -> Functor, remove_whitespace_and_comments!(do_parse!(
     atom: atom >>
     tag_s!("/") >>
     arity: map_res!(digit, FromStr::from_str) >>
     ( Functor(atom, arity) )
 )));
 
-/// Parses a series of `Clause`s.
-named!(pub program(&str) -> Vec<Clause>,
+named_attr!(
+    #[doc = "Parses a series of `Clause`s."],
+    pub program(&str) -> Vec<Clause>,
     remove_whitespace_and_comments!(many0!(clause)));
 
-/// Parses a query, which is a conjunctive list of `Term`s.
-named!(pub query(&str) -> Vec<Term>, remove_whitespace_and_comments!(do_parse!(
-    terms: separated_list!(tag_s!(","), term) >>
+named_attr!(
+    #[doc = "Parses a query, which is a conjunctive list of `Structure`s."],
+    pub query(&str) -> Vec<Structure>, remove_whitespace_and_comments!(do_parse!(
+    structures: separated_list!(tag_s!(","), structure) >>
     tag_s!(".") >>
-    ( terms )
+    ( structures )
 )));
 
-/// Parses a `Term`.
-named!(pub term(&str) -> Term, remove_whitespace_and_comments!(alt!(
+named_attr!(
+    #[doc = "Parses a `Structure`."],
+    pub structure(&str) -> Structure, remove_whitespace_and_comments!(do_parse!(
+    atom: atom >>
+    subterms: opt!(complete!(delimited!(
+        tag_s!("("),
+        separated_list!(tag_s!(","), term),
+        tag_s!(")")))) >>
+    ( Structure(atom, subterms.unwrap_or_else(Vec::new)) )
+)));
+
+named_attr!(
+    #[doc = "Parses a `Term`."],
+    pub term(&str) -> Term, remove_whitespace_and_comments!(alt!(
     map!(variable, |s| if s == "_" {
         Term::Anonymous
     } else {
         Term::Variable(Variable::from_str(s).unwrap())
-    }) | term_structure
+    }) | map!(structure, Term::Structure)
 )));
 
-/// Parses a valid `Variable`.
-named!(pub variable(&str) -> &str, remove_whitespace_and_comments!(recognize!(tuple!(
+named_attr!(
+    #[doc = "Parses a valid `Variable`."],
+    pub variable(&str) -> &str, remove_whitespace_and_comments!(recognize!(tuple!(
     take_while1_s!(is_variable_start_char),
     take_while_s!(is_plain_char)
 ))));
@@ -150,22 +168,13 @@ named!(unquoted_atom(&str) -> &str, recognize!(tuple!(
     take_while_s!(is_plain_char)
 )));
 
-named!(clause_fact(&str) -> Clause, map!(term, |hd| Clause(hd, vec![])));
+named!(clause_fact(&str) -> Clause, map!(structure, |hd| Clause(hd, vec![])));
 
 named!(clause_rule(&str) -> Clause, do_parse!(
-    hd: term >>
+    hd: structure >>
     tag_s!(":-") >>
-    tl: separated_list!(tag_s!(","), term) >>
+    tl: separated_list!(tag_s!(","), structure) >>
     ( Clause(hd, tl) )
-));
-
-named!(term_structure(&str) -> Term, do_parse!(
-    atom: atom >>
-    subterms: opt!(complete!(delimited!(
-        tag_s!("("),
-        separated_list!(tag_s!(","), term),
-        tag_s!(")")))) >>
-    ( Term::Structure(atom, subterms.unwrap_or_else(Vec::new)) )
 ));
 
 // Helper functions.

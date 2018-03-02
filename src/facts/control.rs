@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use common::Functor;
 
-/// A single M<sub>0</sub> instruction.
+/// A single M<sub>1</sub> instruction.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Instruction {
     /// Places the functor part of a structure onto the heap, storing its
@@ -32,6 +32,18 @@ pub enum Instruction {
 
     /// Attempts to unify a value. See `Machine::unify`.
     UnifyValue(usize),
+
+    /// Jumps to the code for the fact with the given functor.
+    Call(Functor),
+
+    /// A no-op.
+    Proceed,
+
+    /// x
+    PutVariable(usize, usize),
+    PutValue(usize, usize),
+    GetVariable(usize, usize),
+    GetValue(usize, usize),
 }
 
 impl Display for Instruction {
@@ -50,6 +62,20 @@ impl Display for Instruction {
                 write!(fmt, "unify_variable {}", r)
             }
             Instruction::UnifyValue(r) => write!(fmt, "unify_value {}", r),
+            Instruction::Call(f) => write!(fmt, "call {}", f),
+            Instruction::Proceed => fmt.write_str("proceed"),
+            Instruction::PutVariable(a, x) => {
+                write!(fmt, "put_variable {}, {}", a, x)
+            }
+            Instruction::PutValue(a, x) => {
+                write!(fmt, "put_value {}, {}", a, x)
+            }
+            Instruction::GetVariable(a, x) => {
+                write!(fmt, "get_variable {}, {}", a, x)
+            }
+            Instruction::GetValue(a, x) => {
+                write!(fmt, "get_value {}, {}", a, x)
+            }
         }
     }
 }
