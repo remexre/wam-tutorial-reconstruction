@@ -104,7 +104,7 @@ fn is_quoted_plain_char(ch: char) -> bool {
 impl Display for Atom {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
         lazy_static! {
-            static ref PLAIN: Regex = Regex::new("^[a-z][a-zA-Z_0-9]*$").unwrap();
+            static ref PLAIN: Regex = Regex::new("^[a-z0-9][a-zA-Z_0-9]*$").unwrap();
         }
         let atom = self.0.as_str();
         if PLAIN.is_match(atom) {

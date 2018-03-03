@@ -54,6 +54,7 @@ impl Machine {
 
     /// Runs an instruction.
     pub fn run_instruction(&mut self, instr: Instruction) {
+        trace!("{}", instr);
         match instr {
             Instruction::PutStructure(functor, reg) => {
                 let n = self.s.push_with(|n| HeapCell::Str(n + 1));
@@ -168,7 +169,6 @@ impl ::Machine for Machine {
         let (query_code, vars) = compile_query(query);
 
         for instr in query_code.into_iter().chain(self.c.clone()) {
-            trace!("{}", instr);
             self.run_instruction(instr);
             if self.s.fail {
                 return Box::new(empty());

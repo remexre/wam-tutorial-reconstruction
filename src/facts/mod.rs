@@ -79,14 +79,9 @@ impl Machine {
         self.heap.reset();
     }
 
-    /// Runs a single instruction, based on the current instruction pointer.
-    /// Returns whether unification just succeeded.
-    pub fn step(&mut self) -> bool {
-        let instr = if let Some(instr) = self.code.get(self.ip) {
-            *instr
-        } else {
-            panic!("ip out of bounds")
-        };
+    /// Runs a single instruction. Returns whether unification just succeeded.
+    pub fn run_instruction(&mut self, instr: Instruction) -> bool {
+        trace!("{}", instr);
         match instr {
             Instruction::PutStructure(functor, reg) => {
                 let n = self.heap.alloc_with(|n| HeapCell::Str(n + 1));
@@ -151,8 +146,21 @@ impl Machine {
                 false
             }
 
+            Instruction::Proceed => true,
+
             i => unimplemented!("instruction not implemented {}", i),
         }
+    }
+
+    /// Runs a single instruction, based on the current instruction pointer.
+    /// Returns whether unification just succeeded.
+    pub fn step(&mut self) -> bool {
+        let instr = if let Some(instr) = self.code.get(self.ip) {
+            *instr
+        } else {
+            panic!("ip out of bounds")
+        };
+        self.run_instruction(instr)
     }
 
     /// Performs unification between two heap terms.
@@ -197,18 +205,35 @@ impl ::Machine for Machine {
 
         self.reset();
 
-        Box::new(MachineIter { machine: self })
+        let (query_code, vars) = compile_query(query);
+
+        for instr in query_code {
+            assert!(!self.run_instruction(instr));
+            assert!(!self.fail);
+        }
+
+        Box::new(MachineIter {
+            machine: self,
+            vars,
+        })
     }
 }
 
 struct MachineIter<'a> {
     machine: &'a mut Machine,
+    vars: HashMap<Variable, usize>,
 }
 
 impl<'a> Iterator for MachineIter<'a> {
     type Item = Result<HashMap<Variable, Term>, Error>;
 
     fn next(&mut self) -> Option<Result<HashMap<Variable, Term>, Error>> {
-        unimplemented!()
+        loop {
+            if self.machine.step() {
+                unimplemented!("unification succeeded")
+            } else if self.machine.fail {
+                return None;
+            }
+        }
     }
 }

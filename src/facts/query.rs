@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use common::{FlatTermValue, Functor, Term, Variable};
+use common::{FlatTermValue, Functor, Structure, Term, Variable};
 
 use super::control::Instruction;
 
@@ -48,29 +48,43 @@ fn compile_visitor(
     }
 }
 
+/// Compiles an argument.
+pub fn compile_argument(
+    code: &mut Vec<Instruction>,
+    seen: &mut HashSet<usize>,
+    flats: &mut Vec<Option<FlatTermValue>>,
+    vars: &mut HashMap<Variable, usize>,
+    current: usize,
+) {
+    if let Some(val) = flats[current].take() {
+        match val {
+            FlatTermValue::Structure(_, _) => {
+                flats[current] = Some(val);
+                compile_visitor(code, seen, flats, vars, current);
+            }
+            FlatTermValue::Variable(Some(var)) => unimplemented!(),
+            FlatTermValue::Variable(None) => unimplemented!(),
+        }
+    }
+}
+
 /// Compiles a term into instructions that will construct the term on the
 /// heap, storing the root into the given register number.
 pub fn compile_query(
-    term: Term,
+    query: Structure,
 ) -> (Vec<Instruction>, HashMap<Variable, usize>) {
-    let mut flat = term.flatten().0.into_iter().map(Some).collect::<Vec<_>>();
+    let mut flat = query.flatten().0.into_iter().map(Some).collect::<Vec<_>>();
     let mut seen = HashSet::with_capacity(flat.len());
     let mut code = Vec::new();
     let mut vars = HashMap::new();
 
-    for i in 0..flat.len() {
-        compile_visitor(&mut code, &mut seen, &mut flat, &mut vars, i);
+    for i in 0..query.functor().1 {
+        compile_argument(&mut code, &mut seen, &mut flat, &mut vars, i);
     }
     assert!(flat.iter().all(Option::is_none));
 
-    // This might happen if the FlatTerm is only variables, which should only
-    // occur for a variable (or anonymous) term.
     if code.is_empty() {
-        assert!(match term {
-            Term::Anonymous | Term::Variable(_) => true,
-            _ => false,
-        });
-        code = vec![Instruction::SetVariable(0)];
+        panic!("code is empty")
     }
 
     (code, vars)
@@ -79,12 +93,12 @@ pub fn compile_query(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test_utils::example_query_term;
+    use test_utils::example_query;
 
     #[test]
-    fn compiles_example_term() {
+    fn compiles_example_query() {
         assert_eq!(
-            compile_query(example_query_term()),
+            compile_query(example_query()),
             (
                 vec![
                     Instruction::PutStructure(functor!(h / 2), 2),
