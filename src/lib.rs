@@ -26,6 +26,7 @@ mod test_utils;
 
 pub mod common;
 pub mod facts;
+pub mod flat;
 pub mod unification;
 
 use std::collections::HashMap;
