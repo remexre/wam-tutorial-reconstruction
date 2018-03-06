@@ -1,24 +1,21 @@
-//! M<sub>1</sub>, an extension of M<sub>0</sub> that attempts unification
-//! against several facts instead of just one.
+//! M<sub>2</sub>, an extension of M<sub>1</sub> that allows for conjunctions
+//! (without backtracking).
 
+mod compile;
 mod control;
-mod program;
-mod query;
 mod store;
 
 use std::collections::HashMap;
-use std::iter::once;
 
 use failure::Error;
 
 use common::{Clause, Functor, HeapCell, Structure, Term, Variable};
 
-pub use self::control::Instruction;
-pub use self::program::compile_program;
-pub use self::query::compile_query;
+pub use self::control::{Instruction, Location};
+pub use self::compile::{compile_program, compile_query};
 use self::store::{Heap, Registers};
 
-/// An abstract machine for M<sub>1</sub>.
+/// An abstract machine for M<sub>2</sub>.
 #[derive(Debug)]
 pub struct Machine {
     /// All stored code.
@@ -30,7 +27,7 @@ pub struct Machine {
     /// The instruction pointer.
     p: usize,
 
-    /// The stored instruction pointer.
+    /// The stored instruction pointer, aka the continuation point.
     cp: usize,
 
     /// The unification pointer.
@@ -46,7 +43,7 @@ pub struct Machine {
     registers: Registers,
 
     /// The stack.
-    stack: Vec<Vec<usize>>,
+    stack: Vec<usize>,
 
     /// The heap.
     heap: Heap,
@@ -54,9 +51,8 @@ pub struct Machine {
 
 impl Machine {
     /// Compiles a set of clauses into a program.
-    pub fn new(program: Vec<Clause>) -> Machine {
-        let (code, labels) = compile_program(program);
-        Machine::with_code(code, labels)
+    pub fn new(program: &[Clause]) -> Result<Machine, Error> {
+        compile_program(program).map(|(c, l)| Machine::with_code(c, l))
     }
 
     /// Creates a new Machine containing the given code and labels.
@@ -93,25 +89,25 @@ impl Machine {
     pub fn run_instruction(&mut self, instr: Instruction) -> bool {
         trace!("{}", instr);
         match instr {
-            Instruction::PutStructure(functor, reg) => {
+            Instruction::PutStructure(functor, loc) => {
                 let n = self.heap.alloc_with(|n| HeapCell::Str(n + 1));
                 self.heap.alloc(HeapCell::Functor(functor));
-                self.registers[reg] = n;
+                self.write(loc, n);
                 false
             }
-            Instruction::SetVariable(reg) => {
+            Instruction::SetVariable(loc) => {
                 let n = self.heap.alloc_with(|n| HeapCell::Ref(n));
-                self.registers[reg] = n;
+                self.write(loc, n);
                 false
             }
-            Instruction::SetValue(reg) => {
-                let cell = self.heap[self.registers[reg]];
+            Instruction::SetValue(loc) => {
+                let cell = self.heap[self.read(loc)];
                 self.heap.alloc(cell);
                 false
             }
 
-            Instruction::GetStructure(functor, reg) => {
-                let addr = self.heap.deref(self.registers[reg]);
+            Instruction::GetStructure(functor, loc) => {
+                let addr = self.heap.deref(self.read(loc));
                 match self.heap[addr] {
                     HeapCell::Ref(_) => {
                         let n = self.heap.alloc_with(|n| HeapCell::Str(n + 1));
@@ -133,22 +129,22 @@ impl Machine {
                 }
                 false
             }
-            Instruction::UnifyVariable(reg) => {
-                if self.write_mode {
-                    self.registers[reg] =
-                        self.heap.alloc_with(|n| HeapCell::Ref(n));
+            Instruction::UnifyVariable(loc) => {
+                let addr = if self.write_mode {
+                    self.heap.alloc_with(|n| HeapCell::Ref(n))
                 } else {
-                    self.registers[reg] = self.s;
-                }
+                    self.s
+                };
+                self.write(loc, addr);
                 self.s += 1;
                 false
             }
-            Instruction::UnifyValue(reg) => {
+            Instruction::UnifyValue(loc) => {
                 if self.write_mode {
-                    let val = self.heap[self.registers[reg]];
+                    let val = self.heap[self.read(loc)];
                     self.heap.alloc(val);
                 } else {
-                    let a1 = self.registers[reg];
+                    let a1 = self.read(loc);
                     let a2 = self.s;
                     self.unify(a1, a2);
                 }
@@ -156,13 +152,25 @@ impl Machine {
                 false
             }
 
-            Instruction::Call(f) => {
-                //
-                unimplemented!()
+            Instruction::Call(ref f) => {
+                self.cp = self.p + 1;
+                self.p = self.labels[f];
+                false
             }
-            Instruction::Proceed => true,
+            Instruction::Proceed => {
+                self.p = self.cp;
+                false
+            }
 
             i => unimplemented!("instruction not implemented {}", i),
+        }
+    }
+
+    /// Reads a value from the given location. Returns a heap address.
+    pub fn read(&self, loc: Location) -> usize {
+        match loc {
+            Location::Register(n) => self.registers[n],
+            Location::Local(n) => unimplemented!("index local"),
         }
     }
 
@@ -203,23 +211,24 @@ impl Machine {
             }
         }
     }
+
+    /// Writes a heap address to the given location.
+    pub fn write(&mut self, loc: Location, addr: usize) {
+        match loc {
+            Location::Register(n) => self.registers[n] = addr,
+            Location::Local(n) => unimplemented!("index local"),
+        }
+    }
 }
 
 impl ::Machine for Machine {
     fn run_query<'a>(
         &'a mut self,
-        mut query: Vec<Structure>,
+        query: Vec<Structure>,
     ) -> Box<'a + Iterator<Item = Result<HashMap<Variable, Term>, Error>>> {
-        if query.len() != 1 {
-            let err =
-                format_err!("M1 doesn't support conjunctions in queries.");
-            return Box::new(once(Err(err)));
-        }
-        let query = query.remove(0);
-
         self.reset();
 
-        let (query_code, vars) = compile_query(query);
+        let (query_code, vars) = compile_query(&query);
 
         for instr in query_code {
             assert!(!self.run_instruction(instr));
@@ -228,14 +237,14 @@ impl ::Machine for Machine {
 
         Box::new(MachineIter {
             machine: self,
-            vars,
+            _vars: vars,
         })
     }
 }
 
 struct MachineIter<'a> {
     machine: &'a mut Machine,
-    vars: HashMap<Variable, usize>,
+    _vars: HashMap<Variable, usize>,
 }
 
 impl<'a> Iterator for MachineIter<'a> {
@@ -249,5 +258,55 @@ impl<'a> Iterator for MachineIter<'a> {
                 return None;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use Machine as MachineTrait;
+    use super::*;
+    use test_utils::{example_program, example_query};
+
+    #[test]
+    fn works_for_example_program() {
+        let program = vec![Clause(example_program(), vec![])];
+        let mut machine =
+            Machine::new(&program).expect("Couldn't build machine");
+        let matches = machine
+            .run_query(vec![example_query()])
+            .collect::<Result<Vec<_>, _>>()
+            .expect("Failed to run query");
+        assert_eq!(
+            matches,
+            vec![
+                vec![
+                    (
+                        variable!("W"),
+                        Term::Structure(Structure(
+                            atom!(f),
+                            vec![Term::Structure(Structure(atom!(a), vec![]))],
+                        )),
+                    ),
+                    (
+                        variable!("Z"),
+                        Term::Structure(Structure(
+                            atom!(f),
+                            vec![
+                                Term::Structure(Structure(
+                                    atom!(f),
+                                    vec![
+                                        Term::Structure(Structure(
+                                            atom!(a),
+                                            vec![],
+                                        )),
+                                    ],
+                                )),
+                            ],
+                        )),
+                    ),
+                ].into_iter()
+                    .collect(),
+            ]
+        );
     }
 }

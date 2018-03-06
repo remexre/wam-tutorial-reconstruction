@@ -1,7 +1,6 @@
 //! Common code used by multiple chapters.
 
 mod env;
-mod flatten;
 pub mod parsers;
 #[cfg(test)]
 mod tests;
@@ -14,7 +13,6 @@ use regex::Regex;
 use symbol::Symbol;
 
 pub use self::env::Env;
-pub use self::flatten::{FlatTerm, FlatTermValue};
 
 /// An error while parsing.
 #[derive(Clone, Debug, Fail, PartialEq)]

@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
-use common::{FlatTermValue, Functor, Term};
+use common::{Functor, Term};
 
 use super::control::Instruction;
+use super::flatten::{FlatTerm, FlatTermValue};
 
 fn compile(
     seen: &mut HashSet<usize>,
@@ -20,8 +21,8 @@ fn compile(
 }
 
 /// Compiles a "program" (a term to unify against) into instructions.
-pub fn compile_program(term: Term) -> Vec<Instruction> {
-    let flat = term.flatten().0;
+pub fn compile_program(term: &Term) -> Vec<Instruction> {
+    let flat = FlatTerm::flatten(term).0;
     let mut seen = HashSet::with_capacity(flat.len());
     let mut code = Vec::new();
 
@@ -45,7 +46,7 @@ mod tests {
     #[test]
     fn compiles_example_term() {
         assert_eq!(
-            compile_program(example_program_term()),
+            compile_program(&example_program_term()),
             vec![
                 Instruction::GetStructure(functor!(p / 3), 0),
                 Instruction::UnifyVariable(1),

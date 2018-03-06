@@ -5,6 +5,7 @@ use failure::Error;
 
 use common::{Functor, HeapCell, Structure, Term, Variable};
 
+/// The heap, aka the global stack.
 #[derive(Debug)]
 pub struct Heap(Vec<HeapCell>);
 

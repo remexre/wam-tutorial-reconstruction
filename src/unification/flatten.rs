@@ -1,4 +1,4 @@
-use super::{Atom, Env, Structure, Term, Variable};
+use common::{Atom, Env, Structure, Term, Variable};
 
 /// A breadth-first search to flatten a term.
 ///
@@ -63,55 +63,27 @@ pub enum FlatTermValue {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FlatTerm(pub Vec<FlatTermValue>);
 
-impl Structure {
-    /// Converts a Structure into a flattened form.
-    ///
-    /// Note that this flattened form is different from Term's flattened form.
-    pub fn flatten(&self) -> FlatTerm {
-        // We start with a placeholder for each argument.
-        let mut regs = vec![FlatTermValue::Variable(None); self.1.len()];
-        let mut env = Env::new();
-        for (i, arg) in self.1.iter().enumerate() {
-            flatten_term_onto(&mut regs, &mut env, i, arg);
-        }
-        FlatTerm(regs)
-    }
-}
-
-impl Term {
+impl FlatTerm {
     /// Converts a Term into a flattened form.
-    pub fn flatten(&self) -> FlatTerm {
+    pub fn flatten(term: &Term) -> FlatTerm {
         // We start with a placeholder.
         let mut regs = vec![FlatTermValue::Variable(None)];
         let mut env = Env::new();
-        flatten_term_onto(&mut regs, &mut env, 0, self);
+        flatten_term_onto(&mut regs, &mut env, 0, term);
         FlatTerm(regs)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use test_utils::{arb_structure, arb_term, example_query,
-                     example_query_term};
+    use test_utils::{arb_term, example_query_term};
 
     use super::*;
 
     #[test]
-    fn flattens_example_query_structure() {
-        panic!("{:?}", example_query().flatten());
-        assert_eq!(
-            example_query().flatten(),
-            FlatTerm(vec![
-                //
-                unimplemented!(),
-            ])
-        );
-    }
-
-    #[test]
     fn flattens_example_query_term() {
         assert_eq!(
-            example_query_term().flatten(),
+            FlatTerm::flatten(&example_query_term()),
             FlatTerm(vec![
                 FlatTermValue::Structure(atom!(p), vec![1, 2, 3]),
                 FlatTermValue::Variable(Some(variable!("Z"))),
@@ -125,23 +97,23 @@ mod tests {
     #[test]
     fn flattens_simple_terms() {
         assert_eq!(
-            Term::Anonymous.flatten(),
+            FlatTerm::flatten(&Term::Anonymous),
             FlatTerm(vec![FlatTermValue::Variable(None)])
         );
 
         assert_eq!(
-            Term::Variable(variable!("X")).flatten(),
+            FlatTerm::flatten(&Term::Variable(variable!("X"))),
             FlatTerm(vec![FlatTermValue::Variable(Some(variable!("X")))])
         );
 
         assert_eq!(
-            Term::Structure(Structure(
+            FlatTerm::flatten(&Term::Structure(Structure(
                 "foo".into(),
                 vec![
                     Term::Variable(variable!("X")),
                     Term::Variable(variable!("X")),
                 ]
-            )).flatten(),
+            ))),
             FlatTerm(vec![
                 FlatTermValue::Structure(atom!(foo), vec![1, 1]),
                 FlatTermValue::Variable(Some(variable!("X"))),
@@ -151,13 +123,8 @@ mod tests {
 
     proptest! {
         #[test]
-        fn flatten_structure_doesnt_crash(ref structure in arb_structure(5, 5)) {
-            structure.flatten();
-        }
-
-        #[test]
         fn flatten_term_doesnt_crash(ref term in arb_term(5, 5)) {
-            term.flatten();
+            FlatTerm::flatten(term);
         }
     }
 }

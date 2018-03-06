@@ -58,15 +58,6 @@ pub enum MachineOpts {
         src_file: PathBuf,
     },
 
-    /// The fact-unifying machine from chapter 2.
-    #[structopt(name = "facts")]
-    Facts {
-        /// The file to read. Should contain only facts, with up to one fact
-        /// per functor.
-        #[structopt(name = "FILE", parse(from_os_str))]
-        src_file: PathBuf,
-    },
-
     /// The flat resolution machine from chapter 3.
     #[structopt(name = "flat")]
     Flat {
@@ -90,24 +81,13 @@ impl MachineOpts {
                 if !body.is_empty() {
                     bail!("M0 doesn't support implications.");
                 }
-                Ok(Box::new(unification::Machine::new(Term::Structure(head))))
-            }
-            MachineOpts::Facts { ref src_file } => {
-                let mut program = read_src_file(src_file)?;
-                let facts = program
-                    .into_iter()
-                    .map(|Clause(head, body)| {
-                        if !body.is_empty() {
-                            bail!("M1 doesn't support implications.");
-                        }
-                        Ok(head)
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(Box::new(facts::Machine::new(facts)))
+                let program = Term::Structure(head);
+                Ok(Box::new(unification::Machine::new(&program)))
             }
             MachineOpts::Flat { ref src_file } => {
                 let program = read_src_file(src_file)?;
-                Ok(Box::new(flat::Machine::new(program)))
+                let machine = flat::Machine::new(&program)?;
+                Ok(Box::new(machine))
             }
         }
     }

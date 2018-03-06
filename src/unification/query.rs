@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use common::{FlatTermValue, Functor, Term, Variable};
+use common::{Functor, Term, Variable};
 
 use super::control::Instruction;
+use super::flatten::{FlatTerm, FlatTermValue};
 
 fn compile(
     seen: &mut HashSet<usize>,
@@ -51,9 +52,13 @@ fn compile_visitor(
 /// Compiles a term into instructions that will construct the term on the
 /// heap, storing the root into the given register number.
 pub fn compile_query(
-    term: Term,
+    term: &Term,
 ) -> (Vec<Instruction>, HashMap<Variable, usize>) {
-    let mut flat = term.flatten().0.into_iter().map(Some).collect::<Vec<_>>();
+    let mut flat = FlatTerm::flatten(&term)
+        .0
+        .into_iter()
+        .map(Some)
+        .collect::<Vec<_>>();
     let mut seen = HashSet::with_capacity(flat.len());
     let mut code = Vec::new();
     let mut vars = HashMap::new();
@@ -66,7 +71,7 @@ pub fn compile_query(
     // This might happen if the FlatTerm is only variables, which should only
     // occur for a variable (or anonymous) term.
     if code.is_empty() {
-        assert!(match term {
+        assert!(match *term {
             Term::Anonymous | Term::Variable(_) => true,
             _ => false,
         });
@@ -84,7 +89,7 @@ mod tests {
     #[test]
     fn compiles_example_term() {
         assert_eq!(
-            compile_query(example_query_term()),
+            compile_query(&example_query_term()),
             (
                 vec![
                     Instruction::PutStructure(functor!(h / 2), 2),

@@ -1,5 +1,8 @@
 //! A Rust implementation of the machines in "Warren's Abstract Machine: A
 //! Tutorial Reconstruction."
+//!
+//! The M<sub>1</sub> machine is not implemented, as it is sparsely described
+//! and a relatively small improvement.
 #![warn(missing_docs)]
 
 extern crate either;
@@ -25,7 +28,6 @@ mod macros;
 mod test_utils;
 
 pub mod common;
-pub mod facts;
 pub mod flat;
 pub mod unification;
 

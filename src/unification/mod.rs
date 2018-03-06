@@ -2,6 +2,7 @@
 
 mod control;
 mod env;
+mod flatten;
 mod store;
 mod program;
 mod query;
@@ -37,9 +38,9 @@ pub struct Machine {
 
 impl Machine {
     /// Creates a new Machine, given the term to unify against.
-    pub fn new(program: Term) -> Machine {
+    pub fn new(program: &Term) -> Machine {
         let mut machine = Machine::empty();
-        machine.c = compile_program(program);
+        machine.c = compile_program(&program);
         machine
     }
 
@@ -166,7 +167,7 @@ impl ::Machine for Machine {
         self.e.clear();
         self.s.reset();
 
-        let (query_code, vars) = compile_query(query);
+        let (query_code, vars) = compile_query(&query);
 
         for instr in query_code.into_iter().chain(self.c.clone()) {
             self.run_instruction(instr);
@@ -198,7 +199,7 @@ mod tests {
 
     fn compile_query_roundtrip(term: Term) -> Term {
         let mut machine = Machine::empty();
-        for instr in compile_query(term).0 {
+        for instr in compile_query(&term).0 {
             machine.run_instruction(instr);
             assert!(!machine.s.fail);
         }
@@ -216,7 +217,7 @@ mod tests {
 
     #[test]
     fn works() {
-        let mut machine = Machine::new(example_program_term());
+        let mut machine = Machine::new(&example_program_term());
         let res = machine
             .run_query(vec![example_query()])
             .collect::<Result<Vec<_>, _>>()
