@@ -25,18 +25,6 @@ impl Display for Location {
 /// A single M<sub>2</sub> instruction.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Instruction {
-    /// Places the functor part of a structure onto the heap, storing its
-    /// address in the location given by the second argument.
-    PutStructure(Functor, Location),
-
-    /// Places an unbound variable cell onto the heap, storing its address in
-    /// the location given by the argument.
-    SetVariable(Location),
-
-    /// Places an reference to the value referenced by the register location
-    /// given by the argument onto the heap.
-    SetValue(Location),
-
     /// Inspects the value pointed to by the numbered register in preparation
     /// for unification with a functor.
     ///
@@ -47,13 +35,21 @@ pub enum Instruction {
     /// the machine in write mode, which constructs the term on the heap.
     GetStructure(Functor, Location),
 
-    /// Attempts to unify a variable.
-    UnifyVariable(Location),
+    GetValue(Location, usize),
+    GetVariable(Location, usize),
+
+    /// Places the functor part of a structure onto the heap, storing its
+    /// address in the location given by the second argument.
+    PutStructure(Functor, Location),
+
+    PutValue(Location, usize),
+    PutVariable(Location, usize),
 
     /// Attempts to unify a value. See `Machine::unify`.
     UnifyValue(Location),
 
-    GetValue(Location, Location),
+    /// Attempts to unify a variable.
+    UnifyVariable(Location),
 
     /// Calls the code for the fact with the given functor, with support for
     /// faster leaf calls.
@@ -72,33 +68,34 @@ pub enum Instruction {
 impl Display for Instruction {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
         match *self {
-            Instruction::PutStructure(f, r) => {
-                write!(fmt, "put_structure {}, {}", f, r)
+            Instruction::GetStructure(f, reg) => {
+                write!(fmt, "get_structure {}, {}", f, reg)
             }
-            Instruction::SetVariable(r) => write!(fmt, "set_variable {}", r),
-            Instruction::SetValue(r) => write!(fmt, "set_value {}", r),
+            Instruction::GetValue(loc, reg) => {
+                write!(fmt, "get_value {}, {}", loc, reg)
+            }
+            Instruction::GetVariable(loc, reg) => {
+                write!(fmt, "get_variable {}, {}", loc, reg)
+            }
 
-            Instruction::GetStructure(f, r) => {
-                write!(fmt, "get_structure {}, {}", f, r)
+            Instruction::PutStructure(f, reg) => {
+                write!(fmt, "put_structure {}, {}", f, reg)
             }
+            Instruction::PutValue(loc, reg) => {
+                write!(fmt, "put_value {}, {}", loc, reg)
+            }
+            Instruction::PutVariable(loc, reg) => {
+                write!(fmt, "put_variable {}, {}", loc, reg)
+            }
+
+            Instruction::UnifyValue(r) => write!(fmt, "unify_value {}", r),
             Instruction::UnifyVariable(r) => {
                 write!(fmt, "unify_variable {}", r)
             }
-            Instruction::UnifyValue(r) => write!(fmt, "unify_value {}", r),
+
             Instruction::Call(f) => write!(fmt, "call {}", f),
             Instruction::Proceed => fmt.write_str("proceed"),
-            //Instruction::PutVariable(a, x) => {
-            //write!(fmt, "put_variable {}, {}", a, x)
-            //}
-            //Instruction::PutValue(a, x) => {
-            //write!(fmt, "put_value {}, {}", a, x)
-            //}
-            //Instruction::GetVariable(a, x) => {
-            //write!(fmt, "get_variable {}, {}", a, x)
-            //}
-            Instruction::GetValue(a, x) => {
-                write!(fmt, "get_value {}, {}", a, x)
-            }
+
             Instruction::Allocate(n) => write!(fmt, "allocate {}", n),
             Instruction::Deallocate => fmt.write_str("deallocate"),
         }

@@ -1,5 +1,6 @@
 mod clause;
 mod fact;
+mod flatten;
 
 use std::collections::HashMap;
 
@@ -45,9 +46,7 @@ pub fn compile_program(
 
 /// Compiles a query into a series of instructions. Also returns a list of
 /// variable assignments.
-pub fn compile_query(
-    query: &[Structure],
-) -> (Vec<Instruction>, HashMap<Variable, usize>) {
+pub fn compile_query(query: &[Structure]) -> (Vec<Instruction>, Vec<Variable>) {
     compile_clause_helper(None, query)
 }
 

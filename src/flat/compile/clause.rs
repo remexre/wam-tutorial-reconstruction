@@ -1,28 +1,22 @@
 use std::collections::{HashMap, HashSet};
 
-use common::{Atom, Structure, Term, Variable};
+use common::{Structure, Term, Variable};
 
-use super::super::Instruction;
-
-/// A type for flattened terms.
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum FlatTerm {
-    Functor(Atom, Vec<usize>),
-    Ref(usize),
-    Variable,
-}
+use super::flatten::{flatten, FlatTerm};
+use super::super::{Instruction, Location};
 
 /// Compiles a query or rule into a series of instructions and a mapping
 /// between named variables and the registers the variables are stored in. If
 /// the head is `None`, compile as a query. Otherwise, compiles as a rule.
 ///
-/// Note that if compiled as a query, all variables are marked as permanent.
+/// Note that if compiled as a query, all variables are marked as permanent and
+/// the stack frame is not deallocated after running the code.
 pub fn compile(
     head: Option<&Structure>,
     body: &[Structure],
-) -> (Vec<Instruction>, HashMap<Variable, usize>) {
+) -> (Vec<Instruction>, Vec<Variable>) {
     let vars = find_variables(head, body);
-    let permanent: Vec<Variable> = if let Some(head) = head {
+    let permanent: Vec<Variable> = if head.is_some() {
         vars.into_iter()
             .filter(|&(_, n)| n > 1)
             .map(|(v, _)| v)
@@ -30,49 +24,89 @@ pub fn compile(
     } else {
         vars.into_iter().map(|p| p.0).collect()
     };
+    //let permanent_map =
+    //permanent.iter().enumerate().map(|(i, &v)| (v, i)).collect();
 
     let mut code = vec![Instruction::Allocate(permanent.len())];
-    let mut vars = HashMap::new();
+    //let mut seen_vars = HashSet::new();
 
-    if let Some(head) = head {
-        compile_head(&mut code, &mut vars, &permanent, &head);
-    }
+    //let mut vars = HashMap::new();
+    // TODO: Clean this up.
+    let body = if let Some(head) = head {
+        /*
+        compile_head(
+            &mut code,
+            &mut seen_vars,
+            &mut vars,
+            &permanent_map,
+            &head,
+        );
+        compile_body(
+            &mut code,
+            &mut seen_vars,
+            &mut vars,
+            &permanent_map,
+            &body[0],
+        );
+        */
+        &body[1..]
+    } else {
+        body
+    };
     for s in body {
-        compile_body(&mut code, &mut vars, &permanent, s);
+        //vars.clear();
+        // compile_body(&mut code, &mut seen_vars, &mut vars, &permanent_map, s);
+    }
+    if head.is_none() {
+        code.push(Instruction::Deallocate);
     }
 
-    code.push(Instruction::Deallocate);
-    (code, vars)
+    (code, permanent)
 }
 
 fn compile_head(
     code: &mut Vec<Instruction>,
-    vars: &mut HashMap<Variable, usize>,
-    permanent: &[Variable],
-    head: &Structure,
+    seen: &mut HashSet<usize>,
+    vars: &mut HashMap<Variable, Location>,
+    permanent: &HashMap<Variable, usize>,
+    s: &Structure,
 ) {
-    unimplemented!(
-        "compile_head\n\t{:?}\n\t{:?}\n\t{:?}\n\t{:?}",
-        code,
-        vars,
-        permanent,
-        head
-    )
+    for (i, f) in flatten(s).into_iter().enumerate() {
+        match f {
+            FlatTerm::Functor(a, is) => unimplemented!(),
+            FlatTerm::Ref(n) => unimplemented!(),
+            FlatTerm::Variable(Some(v)) => unimplemented!(),
+            FlatTerm::Variable(None) => unimplemented!(),
+        }
+    }
 }
 
 fn compile_body(
     code: &mut Vec<Instruction>,
+    seen_vars: &mut HashSet<Variable>,
     vars: &mut HashMap<Variable, usize>,
-    permanent: &[Variable],
+    permanent: &HashMap<Variable, usize>,
     s: &Structure,
 ) {
-    unimplemented!(
-        "compile_body\n\t{:?}\n\t{:?}\n\t{:?}\n\t{:?}",
-        code,
-        vars,
-        permanent,
-        s
-    );
+    for (i, t) in s.1.iter().enumerate() {
+        match *t {
+            Term::Anonymous => unimplemented!(),
+            Term::Structure(Structure(a, ref ts)) => unimplemented!(),
+            Term::Variable(v) => {
+                let seen = !seen_vars.insert(v);
+                if let Some(&loc) = permanent.get(&v) {
+                    let loc = Location::Local(loc);
+                    code.push(if seen {
+                        Instruction::PutValue(loc, i)
+                    } else {
+                        Instruction::PutVariable(loc, i)
+                    });
+                } else {
+                    unimplemented!()
+                }
+            }
+        }
+    }
     code.push(Instruction::Call(s.functor()));
 }
 
@@ -126,4 +160,56 @@ fn find_variables(
         }
     }
     vars
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn figure_3_1() {
+        let code = compile(
+            Some(&Structure(
+                atom!(p),
+                vec![
+                    Term::Variable(variable!("X")),
+                    Term::Variable(variable!("Y")),
+                ],
+            )),
+            &[
+                Structure(
+                    atom!(q),
+                    vec![
+                        Term::Variable(variable!("X")),
+                        Term::Variable(variable!("Z")),
+                    ],
+                ),
+                Structure(
+                    atom!(r),
+                    vec![
+                        Term::Variable(variable!("Z")),
+                        Term::Variable(variable!("Y")),
+                    ],
+                ),
+            ],
+        );
+        assert_eq!(
+            code,
+            (
+                vec![
+                    Instruction::Allocate(2),
+                    Instruction::GetVariable(Location::Register(2), 0),
+                    Instruction::GetVariable(Location::Local(0), 1),
+                    Instruction::PutValue(Location::Register(2), 0),
+                    Instruction::PutVariable(Location::Local(1), 1),
+                    Instruction::Call(functor!(q / 2)),
+                    Instruction::PutValue(Location::Local(1), 0),
+                    Instruction::PutValue(Location::Local(0), 1),
+                    Instruction::Call(functor!(r / 2)),
+                    Instruction::Deallocate,
+                ],
+                vec![variable!("Y"), variable!("Z")]
+            )
+        )
+    }
 }

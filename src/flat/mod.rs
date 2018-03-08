@@ -89,23 +89,6 @@ impl Machine {
     pub fn run_instruction(&mut self, instr: Instruction) -> bool {
         trace!("{}", instr);
         match instr {
-            Instruction::PutStructure(functor, loc) => {
-                let n = self.heap.alloc_with(|n| HeapCell::Str(n + 1));
-                self.heap.alloc(HeapCell::Functor(functor));
-                self.write(loc, n);
-                false
-            }
-            Instruction::SetVariable(loc) => {
-                let n = self.heap.alloc_with(|n| HeapCell::Ref(n));
-                self.write(loc, n);
-                false
-            }
-            Instruction::SetValue(loc) => {
-                let cell = self.heap[self.read(loc)];
-                self.heap.alloc(cell);
-                false
-            }
-
             Instruction::GetStructure(functor, loc) => {
                 let addr = self.heap.deref(self.read(loc));
                 match self.heap[addr] {
@@ -129,16 +112,14 @@ impl Machine {
                 }
                 false
             }
-            Instruction::UnifyVariable(loc) => {
-                let addr = if self.write_mode {
-                    self.heap.alloc_with(|n| HeapCell::Ref(n))
-                } else {
-                    self.s
-                };
-                self.write(loc, addr);
-                self.s += 1;
+
+            Instruction::PutStructure(functor, loc) => {
+                let n = self.heap.alloc_with(|n| HeapCell::Str(n + 1));
+                self.heap.alloc(HeapCell::Functor(functor));
+                self.write(loc, n);
                 false
             }
+
             Instruction::UnifyValue(loc) => {
                 if self.write_mode {
                     let val = self.heap[self.read(loc)];
@@ -148,6 +129,16 @@ impl Machine {
                     let a2 = self.s;
                     self.unify(a1, a2);
                 }
+                self.s += 1;
+                false
+            }
+            Instruction::UnifyVariable(loc) => {
+                let addr = if self.write_mode {
+                    self.heap.alloc_with(|n| HeapCell::Ref(n))
+                } else {
+                    self.s
+                };
+                self.write(loc, addr);
                 self.s += 1;
                 false
             }
@@ -162,7 +153,7 @@ impl Machine {
                 false
             }
 
-            i => unimplemented!("instruction not implemented {}", i),
+            i => unimplemented!("instruction not implemented: {}", i),
         }
     }
 
@@ -244,7 +235,7 @@ impl ::Machine for Machine {
 
 struct MachineIter<'a> {
     machine: &'a mut Machine,
-    _vars: HashMap<Variable, usize>,
+    _vars: Vec<Variable>,
 }
 
 impl<'a> Iterator for MachineIter<'a> {
